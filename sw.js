@@ -1,15 +1,16 @@
 /* Sunrise service worker — offline shell + notification host.
    Bump CACHE when you change index.html, or phones keep the old copy. */
-const CACHE = 'sunrise-v3';
+const CACHE = 'sunrise-v4';
 
 const SHELL = [
   './',
   './index.html',
   './manifest.webmanifest',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
-  './icons/icon-maskable-512.png',
-  './icons/apple-touch-icon.png'
+  './icon-192.png',
+  './icon-512.png',
+  './icon-maskable-512.png',
+  './apple-touch-icon.png',
+  './favicon-32.png'
 ];
 
 self.addEventListener('install', e => {
@@ -70,8 +71,8 @@ self.addEventListener('message', e => {
   if (d.type !== 'notify') return;
   self.registration.showNotification(d.title || 'Sunrise', {
     body: d.body || '',
-    icon: './icons/icon-192.png',
-    badge: './icons/icon-192.png',
+    icon: './icon-192.png',
+    badge: './icon-192.png',
     tag: 'sunrise-changes',       // replaces rather than stacks
     renotify: false,
     silent: false,
