@@ -402,8 +402,8 @@ button{border:0;background:none;cursor:pointer;padding:0}
     <div class="itbar" id="itBar">
       <div class="barrow">
         <div class="seg" role="group" aria-label="Itinerary view">
-          <button id="vList" aria-pressed="true">List</button>
-          <button id="vMap" aria-pressed="false">Map</button>
+          <button id="vList" aria-pressed="false">List</button>
+          <button id="vMap" aria-pressed="true">Map</button>
         </div>
         <button class="editbtn" id="editBtn" aria-pressed="false" aria-label="Edit the itinerary">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Edit</button>
@@ -693,7 +693,7 @@ const Store={
 };
 
 const S={items:{},name:TRIP.title,checks:{},q:'',cat:'all',hide:false,
- shut:new Set(JSON.parse(localStorage.getItem('sunrise:shut')||'[]')),day:0,itView:'list',tab:'packing',
+ shut:new Set(JSON.parse(localStorage.getItem('sunrise:shut')||'[]')),day:0,itView:'map',tab:'packing',
  days:null,edit:false,follow:true};
 
 /* The itinerary starts as the plan below and becomes editable data the
@@ -1025,7 +1025,7 @@ function mapSVG(day){
    <path id="routeDone" d="${d}" stroke="url(#route)" stroke-width="4.2" fill="none" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
    ${pins}
   </g>
-  <g id="carNode" transform="translate(340,215)"><g id="carSpin">${CAR}</g></g>
+  <g id="carNode" transform="translate(340,215)"><g id="carSpin" transform="scale(1.34)">${CAR}</g></g>
   <g transform="translate(${MAPW-36},${MAPH-40})" opacity=".75">
    <circle r="15" fill="var(--card)" opacity=".75"/><circle r="15" fill="none" stroke="var(--line)" stroke-width="1"/>
    <path d="M0 -11 L4 2 L0 -1 L-4 2 Z" fill="#FF6B5A"/>
@@ -1098,7 +1098,26 @@ function initMap(day){
   requestAnimationFrame(()=>pane.dispatchEvent(new Event('scroll')))};
  pane.addEventListener('scroll',onScroll,{passive:true});
  drawAt(0);onScroll();
- mapCleanup=()=>{pane.removeEventListener('scroll',onScroll);if(raf)cancelAnimationFrame(raf)};
+
+ /* An intro lap: the car drives the whole day once so the map is moving
+    the moment you open it, then hands back to the scroll position. Any
+    touch of the wheel cancels it. */
+ let intro=null;
+ if(L&&!matchMedia('(prefers-reduced-motion:reduce)').matches){
+  const t0=performance.now(),dur=2000;
+  const step=ts=>{
+   if(intro===null)return;
+   const k=clamp((ts-t0)/dur,0,1),e=k<.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2;
+   cur=L*e;drawAt(cur);
+   if(k<1){intro=requestAnimationFrame(step)}else{intro=null;onScroll();if(!raf)raf=requestAnimationFrame(tick)}
+  };
+  intro=requestAnimationFrame(step);
+  const stop=()=>{if(intro){cancelAnimationFrame(intro);intro=null;onScroll();if(!raf)raf=requestAnimationFrame(tick)}};
+  pane.addEventListener('scroll',stop,{once:true,passive:true});
+  svg.addEventListener('pointerdown',stop,{once:true});
+ }
+ mapCleanup=()=>{pane.removeEventListener('scroll',onScroll);
+  if(raf)cancelAnimationFrame(raf);if(intro)cancelAnimationFrame(intro);intro=null};
 }
 
 /* ═══ Sheets ══════════════════════════════════════════════════ */
