@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5">
+<meta name="theme-color" content="#7B3FE4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14101C" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="A shared packing list that updates on everyone's phone at once.">
+<title>Sunrise — shared packing list</title>
+<style>
+/* ─────────────────────────────────────────────────────────────
+   TOKENS
+   Palette: a sunset read left-to-right — amber, coral, magenta,
+   violet, night. Every accent in the app is a sample from this
+   one ramp, so nothing can drift off-brand.
+   ───────────────────────────────────────────────────────────── */
+:root{
+  --sun-1:#FFB86B;  --sun-2:#FF6B5A;  --sun-3:#E0417F;
+  --sun-4:#7B3FE4;  --sun-5:#3B1E6E;
+
+  --canvas:#FFF8F5;
+  --card:#FFFFFF;
+  --card-2:#FDF6F8;
+  --ink:#241733;
+  --ink-2:#6E5D80;
+  --ink-3:#9C8DAC;
+  --line:rgba(36,23,51,.09);
+  --line-2:rgba(36,23,51,.05);
+  --shadow:0 1px 2px rgba(36,23,51,.05), 0 8px 24px -12px rgba(36,23,51,.18);
+  --shadow-lg:0 24px 60px -18px rgba(59,30,110,.34);
+  --scrim:rgba(36,23,51,.34);
+  --glass:rgba(255,248,245,.82);
+
+  --ramp:linear-gradient(90deg,var(--sun-1),var(--sun-2) 34%,var(--sun-3) 66%,var(--sun-4));
+  --r-sm:10px; --r-md:16px; --r-lg:22px; --r-xl:28px;
+
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace;
+  --ease:cubic-bezier(.32,.72,0,1);
+  --safe-b:env(safe-area-inset-bottom,0px);
+  --safe-t:env(safe-area-inset-top,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --canvas:#14101C; --card:#1E1830; --card-2:#241C39;
+    --ink:#F6F0FA; --ink-2:#A99BBC; --ink-3:#7C6E90;
+    --line:rgba(255,255,255,.10); --line-2:rgba(255,255,255,.06);
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+    --shadow-lg:0 24px 60px -18px rgba(0,0,0,.7);
+    --scrim:rgba(8,5,14,.6);
+    --glass:rgba(20,16,28,.82);
+  }
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  font-family:var(--font); background:var(--canvas); color:var(--ink);
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  overscroll-behavior-y:none; -webkit-tap-highlight-color:transparent;
+}
+button,input,select{font:inherit;color:inherit}
+button{border:0;background:none;cursor:pointer;padding:0}
+:focus-visible{outline:2.5px solid var(--sun-3);outline-offset:2px;border-radius:6px}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+/* ─── App shell ─────────────────────────────────────────────── */
+.app{display:flex;flex-direction:column;height:100dvh;max-width:640px;margin:0 auto;position:relative;overflow:hidden}
+.pane{flex:1;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;display:none}
+.pane.on{display:block}
+
+/* ─── SIGNATURE: the horizon ────────────────────────────────────
+   The sun tracks a real arc across the sky as the list gets
+   packed. Position is the quadratic-bezier point at t=progress,
+   so the dot always sits exactly on the drawn trail.
+   ─────────────────────────────────────────────────────────────── */
+.sky{position:relative;padding:calc(var(--safe-t) + 14px) 20px 0;background:linear-gradient(168deg,var(--sun-5),var(--sun-4) 42%,var(--sun-3) 78%,var(--sun-2));color:#fff;overflow:hidden}
+.sky::after{content:"";position:absolute;inset:auto 0 0;height:1px;background:rgba(255,255,255,.16)}
+.brow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.trip{display:flex;align-items:baseline;gap:9px;min-width:0}
+.trip h1{margin:0;font-size:19px;font-weight:680;letter-spacing:-.022em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.room{font:500 11px/1 var(--mono);opacity:.62;letter-spacing:.04em;white-space:nowrap}
+.sync{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:560;padding:6px 11px 6px 9px;border-radius:999px;background:rgba(255,255,255,.15);backdrop-filter:blur(12px);white-space:nowrap}
+.dot{width:6px;height:6px;border-radius:50%;background:#6EE7A8;box-shadow:0 0 0 0 rgba(110,231,168,.6);animation:pulse 2.6s var(--ease) infinite}
+.sync[data-mode="local"] .dot{background:#FFD166;animation:none}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(110,231,168,.55)}70%{box-shadow:0 0 0 7px rgba(110,231,168,0)}100%{box-shadow:0 0 0 0 rgba(110,231,168,0)}}
+
+.horizon{display:block;width:100%;height:104px;margin-top:2px}
+.stat{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;padding:0 2px 16px}
+.pct{font:700 40px/.86 var(--font);letter-spacing:-.045em;font-variant-numeric:tabular-nums}
+.pct small{font-size:16px;font-weight:600;letter-spacing:-.01em;opacity:.72;margin-left:3px}
+.stat-r{font-size:12.5px;font-weight:520;opacity:.78;text-align:right;line-height:1.45;padding-bottom:5px}
+
+/* ─── Controls ──────────────────────────────────────────────── */
+.controls{position:sticky;top:0;z-index:20;background:var(--glass);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--line-2)}
+.searchwrap{padding:11px 16px 9px;display:flex;gap:9px;align-items:center}
+.search{flex:1;position:relative;display:flex;align-items:center}
+.search svg{position:absolute;left:11px;width:16px;height:16px;color:var(--ink-3);pointer-events:none}
+.search input{width:100%;padding:11px 13px 11px 34px;border-radius:12px;border:1px solid var(--line);background:var(--card-2);font-size:16px;letter-spacing:-.01em}
+.search input::placeholder{color:var(--ink-3)}
+.search .clr{position:absolute;right:7px;width:22px;height:22px;border-radius:50%;background:var(--ink-3);color:var(--card);font-size:13px;line-height:22px;text-align:center;display:none}
+.search.has .clr{display:block}
+.ghost{padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--card-2);font-size:13px;font-weight:560;white-space:nowrap;color:var(--ink-2)}
+.ghost[aria-pressed="true"]{background:var(--ink);color:var(--canvas);border-color:var(--ink)}
+
+.chips{display:flex;gap:7px;overflow-x:auto;padding:1px 16px 11px;scrollbar-width:none;scroll-snap-type:x proximity}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;scroll-snap-align:start;padding:7px 13px;border-radius:999px;background:var(--card-2);border:1px solid var(--line);font-size:13px;font-weight:540;letter-spacing:-.008em;color:var(--ink-2);transition:transform .18s var(--ease)}
+.chip:active{transform:scale(.94)}
+.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--canvas)}
+.chip b{font-weight:560;opacity:.55;margin-left:5px;font-variant-numeric:tabular-nums}
+
+/* ─── List ──────────────────────────────────────────────────── */
+.list{padding:8px 16px calc(150px + var(--safe-b))}
+.sect{margin-bottom:12px;background:var(--card);border-radius:var(--r-lg);box-shadow:var(--shadow);overflow:hidden}
+.shead{display:flex;align-items:center;gap:11px;width:100%;padding:13px 15px;text-align:left}
+.sicon{font-size:17px;width:30px;height:30px;flex:none;display:grid;place-items:center;border-radius:9px;background:var(--card-2)}
+.stitle{flex:1;min-width:0}
+.stitle span{display:block;font-size:14.5px;font-weight:620;letter-spacing:-.018em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar{margin-top:6px;height:3px;border-radius:2px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;border-radius:2px;background:var(--ramp);transition:width .5s var(--ease)}
+.scount{font:560 12px/1 var(--mono);color:var(--ink-3);font-variant-numeric:tabular-nums}
+.caret{width:16px;height:16px;color:var(--ink-3);transition:transform .3s var(--ease)}
+.sect.shut .caret{transform:rotate(-90deg)}
+.sect.shut .rows{display:none}
+
+.row{display:flex;align-items:center;gap:12px;padding:0 15px 0 14px;border-top:1px solid var(--line-2)}
+.tick{flex:none;width:25px;height:25px;border-radius:50%;border:1.8px solid var(--ink-3);display:grid;place-items:center;transition:transform .2s var(--ease),background .2s var(--ease),border-color .2s var(--ease);margin:13px 0}
+.tick svg{width:13px;height:13px;color:#fff;opacity:0;transform:scale(.4);transition:.22s var(--ease)}
+.tick:active{transform:scale(.84)}
+.row.done .tick{background:linear-gradient(140deg,var(--sun-3),var(--sun-4));border-color:transparent}
+.row.done .tick svg{opacity:1;transform:scale(1)}
+.face{flex:1;min-width:0;display:flex;align-items:center;gap:9px;padding:13px 0;text-align:left}
+.name{font-size:15px;font-weight:500;letter-spacing:-.014em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color .25s var(--ease),opacity .25s var(--ease)}
+.row.done .name{color:var(--ink-3);text-decoration:line-through;text-decoration-color:var(--ink-3);opacity:.75}
+.qty{flex:none;font:560 11px/1 var(--mono);color:var(--ink-2);background:var(--card-2);padding:4px 7px;border-radius:6px}
+.note{display:block;font-size:12px;color:var(--ink-3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:450}
+.more{flex:none;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;color:var(--ink-3);transition:background .2s var(--ease)}
+.more:active{background:var(--card-2)}
+
+/* ─── Empty / coming soon ───────────────────────────────────── */
+.blank{padding:46px 30px;text-align:center}
+.blank h2{margin:16px 0 7px;font-size:19px;font-weight:660;letter-spacing:-.025em}
+.blank p{margin:0 auto;max-width:34ch;font-size:14.5px;line-height:1.55;color:var(--ink-2)}
+.orb{width:74px;height:74px;margin:0 auto;border-radius:50%;background:var(--ramp);filter:blur(.4px);box-shadow:0 14px 40px -10px var(--sun-3)}
+.solid{display:inline-flex;align-items:center;gap:7px;margin-top:22px;padding:13px 22px;border-radius:999px;background:var(--ink);color:var(--canvas);font-size:15px;font-weight:580;letter-spacing:-.015em;transition:transform .18s var(--ease)}
+.solid:active{transform:scale(.96)}
+.soon{margin:20px 16px 0;padding:20px;background:var(--card);border-radius:var(--r-lg);box-shadow:var(--shadow);text-align:left}
+.soon h3{margin:0 0 12px;font-size:12px;font-weight:640;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.soon li{list-style:none;display:flex;gap:11px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--line-2);font-size:14.5px;letter-spacing:-.012em;line-height:1.4}
+.soon li:first-child{border-top:0}
+.soon ul{margin:0;padding:0}
+.soon li em{flex:none;font-style:normal;font-size:15px}
+
+/* ─── Quick add + tab bar ───────────────────────────────────── */
+.dock{position:absolute;left:0;right:0;bottom:0;z-index:30;background:var(--glass);backdrop-filter:saturate(180%) blur(22px);-webkit-backdrop-filter:saturate(180%) blur(22px);border-top:1px solid var(--line);padding-bottom:var(--safe-b)}
+.quick{display:none;padding:10px 16px 4px}
+.pane-packing-on .quick{display:block}
+.qbtn{display:flex;align-items:center;gap:10px;width:100%;padding:12px 16px;border-radius:15px;background:var(--ramp);color:#fff;font-size:15px;font-weight:580;letter-spacing:-.015em;box-shadow:0 8px 22px -10px var(--sun-3);transition:transform .18s var(--ease)}
+.qbtn:active{transform:scale(.985)}
+.qbtn span{opacity:.85;font-weight:500}
+.tabs{display:flex;padding:4px 10px 8px}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;color:var(--ink-3);font-size:10.5px;font-weight:560;letter-spacing:-.005em;transition:color .2s var(--ease)}
+.tab svg{width:23px;height:23px}
+.tab[aria-selected="true"]{color:var(--sun-4)}
+@media (prefers-color-scheme:dark){.tab[aria-selected="true"]{color:var(--sun-1)}}
+
+/* ─── Sheets ────────────────────────────────────────────────── */
+.scrim{position:fixed;inset:0;z-index:90;background:var(--scrim);backdrop-filter:blur(3px);opacity:0;pointer-events:none;transition:opacity .34s var(--ease)}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:100;max-width:640px;margin:0 auto;background:var(--card);border-radius:var(--r-xl) var(--r-xl) 0 0;box-shadow:var(--shadow-lg);transform:translateY(102%);transition:transform .42s var(--ease);padding-bottom:calc(14px + var(--safe-b));max-height:88dvh;overflow:visible}
+.sheet.on{transform:translateY(0)}
+.grip{width:36px;height:4.5px;border-radius:3px;background:var(--line);margin:9px auto 4px}
+.shd{display:flex;align-items:center;justify-content:space-between;padding:6px 18px 12px}
+.shd h2{margin:0;font-size:17px;font-weight:640;letter-spacing:-.025em}
+.x{width:29px;height:29px;border-radius:50%;background:var(--card-2);color:var(--ink-2);font-size:15px;display:grid;place-items:center}
+.body{padding:0 18px}
+.fld{margin-bottom:13px;position:relative}
+.fld label{display:block;font-size:11.5px;font-weight:620;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin-bottom:7px}
+.fld input[type=text]{width:100%;padding:13px 14px;border-radius:13px;border:1px solid var(--line);background:var(--card-2);font-size:16px;letter-spacing:-.012em}
+.fld input:focus{border-color:var(--sun-4);outline:none;background:var(--card)}
+.two{display:flex;gap:11px}
+.two .fld:first-child{flex:1}
+.step{display:flex;align-items:center;gap:2px;border:1px solid var(--line);background:var(--card-2);border-radius:13px;padding:4px}
+.step button{width:36px;height:38px;border-radius:10px;font-size:19px;font-weight:500;color:var(--ink-2);display:grid;place-items:center}
+.step button:active{background:var(--card)}
+.step em{font:600 15px/1 var(--mono);font-style:normal;min-width:26px;text-align:center;font-variant-numeric:tabular-nums}
+
+/* autocomplete */
+.ac{position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:5;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-lg);overflow:hidden;display:none;max-height:196px;overflow-y:auto}
+.ac.on{display:block}
+.ac button{display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;text-align:left;border-top:1px solid var(--line-2);font-size:14.5px;letter-spacing:-.012em}
+.ac button:first-child{border-top:0}
+.ac button:hover,.ac button.sel{background:var(--card-2)}
+.ac em{font-style:normal;font-size:15px}
+.ac i{margin-left:auto;font-style:normal;font-size:11.5px;color:var(--ink-3);font-weight:500}
+.ac mark{background:none;color:var(--sun-3);font-weight:660}
+@media (prefers-color-scheme:dark){.ac mark{color:var(--sun-1)}}
+
+.acts{padding:14px 18px 0;display:flex;flex-direction:column;gap:9px}
+.act{display:flex;align-items:center;gap:12px;width:100%;padding:14px 16px;border-radius:15px;background:var(--card-2);font-size:15.5px;font-weight:520;letter-spacing:-.015em;text-align:left;transition:transform .16s var(--ease)}
+.act:active{transform:scale(.98)}
+.act.warn{color:#E03B3B}
+@media (prefers-color-scheme:dark){.act.warn{color:#FF7A7A}}
+.act svg{width:19px;height:19px;flex:none;opacity:.75}
+.primary{width:100%;margin-top:4px;padding:15px;border-radius:15px;background:var(--ramp);color:#fff;font-size:16px;font-weight:600;letter-spacing:-.015em;box-shadow:0 8px 22px -10px var(--sun-3);transition:transform .16s var(--ease)}
+.primary:active{transform:scale(.985)}
+.primary[disabled]{opacity:.4;box-shadow:none}
+.hint{font-size:12.5px;color:var(--ink-3);text-align:center;margin:11px 0 0;line-height:1.5}
+
+/* confirm dialog */
+.confirm{position:fixed;inset:0;z-index:110;display:none;place-items:center;padding:28px}
+.confirm.on{display:grid}
+.cbox{width:100%;max-width:310px;background:var(--card);border-radius:24px;box-shadow:var(--shadow-lg);padding:24px 22px 16px;text-align:center;transform:scale(.9);opacity:0;transition:.3s var(--ease)}
+.confirm.on .cbox{transform:scale(1);opacity:1}
+.cbox h3{margin:0 0 8px;font-size:17.5px;font-weight:660;letter-spacing:-.025em}
+.cbox p{margin:0 0 20px;font-size:14px;line-height:1.5;color:var(--ink-2)}
+.cbox .go{width:100%;padding:14px;border-radius:14px;background:#E03B3B;color:#fff;font-size:16px;font-weight:600}
+.cbox .no{width:100%;padding:14px;font-size:16px;font-weight:520;color:var(--ink-2)}
+
+.toast{position:fixed;left:50%;bottom:calc(102px + var(--safe-b));z-index:120;transform:translate(-50%,16px);opacity:0;pointer-events:none;background:var(--ink);color:var(--canvas);padding:11px 18px;border-radius:999px;font-size:13.5px;font-weight:540;letter-spacing:-.01em;transition:.32s var(--ease);white-space:nowrap;box-shadow:var(--shadow-lg)}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+
+.setgrp{margin:16px;background:var(--card);border-radius:var(--r-lg);box-shadow:var(--shadow);overflow:hidden}
+.setgrp h3{margin:0;padding:15px 17px 11px;font-size:11.5px;font-weight:640;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3)}
+.setrow{display:flex;align-items:center;gap:12px;padding:14px 17px;border-top:1px solid var(--line-2);font-size:15px;letter-spacing:-.014em;text-align:left;width:100%}
+.setrow b{font-weight:520}
+.setrow i{margin-left:auto;font-style:normal;font:500 13px/1 var(--mono);color:var(--ink-3);text-align:right}
+.setrow p{margin:4px 0 0;font-size:12.5px;color:var(--ink-3);line-height:1.45;font-weight:450}
+.setrow.warn b{color:#E03B3B}
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <!-- ══ PACKING ══════════════════════════════════════════════ -->
+  <div class="pane on" id="pane-packing">
+    <header class="sky">
+      <div class="brow">
+        <div class="trip"><h1 id="tripName">Our trip</h1><span class="room" id="roomTag"></span></div>
+        <div class="sync" id="syncPill" data-mode="local"><span class="dot"></span><span id="syncTxt">On this device</span></div>
+      </div>
+      <svg class="horizon" viewBox="0 0 320 104" fill="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="trail" x1="0" y1="0" x2="320" y2="0" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#fff" stop-opacity=".28"/><stop offset="1" stop-color="#fff" stop-opacity=".95"/>
+          </linearGradient>
+          <radialGradient id="glow"><stop stop-color="#FFE9C4"/><stop offset=".55" stop-color="#FFC46B"/><stop offset="1" stop-color="#FF9A5A"/></radialGradient>
+          <filter id="halo" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="7"/></filter>
+        </defs>
+        <path d="M22 82 Q160 -26 298 82" stroke="rgba(255,255,255,.16)" stroke-width="1.5" stroke-dasharray="2 5" stroke-linecap="round"/>
+        <path id="trailPath" d="M22 82 Q160 -26 298 82" stroke="url(#trail)" stroke-width="2.5" stroke-linecap="round"/>
+        <circle id="sunHalo" cx="22" cy="82" r="15" fill="#FFC46B" opacity=".55" filter="url(#halo)"/>
+        <circle id="sun" cx="22" cy="82" r="9.5" fill="url(#glow)"/>
+        <line x1="0" y1="82" x2="320" y2="82" stroke="rgba(255,255,255,.34)" stroke-width="1"/>
+      </svg>
+      <div class="stat">
+        <div class="pct" id="pct">0<small>% packed</small></div>
+        <div class="stat-r" id="statR">Nothing on the list yet</div>
+      </div>
+    </header>
+
+    <div class="controls">
+      <div class="searchwrap">
+        <div class="search" id="searchBox">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input type="text" id="q" placeholder="Search items" autocomplete="off" enterkeyhint="search" aria-label="Search items">
+          <button class="clr" id="qClear" aria-label="Clear search">✕</button>
+        </div>
+        <button class="ghost" id="hideBtn" aria-pressed="false">Hide packed</button>
+      </div>
+      <div class="chips" id="chips" role="group" aria-label="Filter by category"></div>
+    </div>
+
+    <div class="list" id="list"></div>
+  </div>
+
+  <!-- ══ ITINERARY ════════════════════════════════════════════ -->
+  <div class="pane" id="pane-itinerary">
+    <header class="sky" style="padding-bottom:22px">
+      <div class="brow"><div class="trip"><h1>Itinerary</h1></div></div>
+      <p style="margin:14px 2px 0;font-size:14px;line-height:1.55;opacity:.85;max-width:38ch">Days, times and places — planned next, once packing feels right.</p>
+    </header>
+    <div class="blank" style="padding-bottom:12px">
+      <div class="orb"></div>
+      <h2>Coming soon</h2>
+      <p>The day-by-day planner isn't built yet. Everything below is what it's shaping up to be.</p>
+    </div>
+    <div class="soon">
+      <h3>Planned</h3>
+      <ul>
+        <li><em>🗓️</em><div>A day per tab, with drag-to-reorder stops</div></li>
+        <li><em>📍</em><div>Places with travel time between them</div></li>
+        <li><em>🕌</em><div>Prayer times pinned against each day</div></li>
+        <li><em>🍼</em><div>Nap and feed windows blocked out</div></li>
+        <li><em>👥</em><div>Same live sync as packing — everyone sees edits instantly</div></li>
+      </ul>
+    </div>
+    <div style="height:150px"></div>
+  </div>
+
+  <!-- ══ SHARE / SETTINGS ═════════════════════════════════════ -->
+  <div class="pane" id="pane-share">
+    <header class="sky" style="padding-bottom:22px">
+      <div class="brow"><div class="trip"><h1>Share &amp; sync</h1></div></div>
+      <p style="margin:14px 2px 0;font-size:14px;line-height:1.55;opacity:.85;max-width:38ch">Anyone with the link edits the same list. No accounts, no passwords.</p>
+    </header>
+
+    <div class="setgrp">
+      <h3>This list</h3>
+      <button class="setrow" id="renameBtn"><b>Trip name</b><i id="nameVal"></i></button>
+      <button class="setrow" id="copyBtn"><div><b>Copy invite link</b><p>Send it to everyone coming. They open it and they're in.</p></div></button>
+      <button class="setrow" id="joinBtn"><div><b>Join a different list</b><p>Enter a room code someone gave you.</p></div></button>
+    </div>
+
+    <div class="setgrp">
+      <h3>Sync status</h3>
+      <div class="setrow"><div><b id="modeTitle">Saved on this device</b><p id="modeBody"></p></div></div>
+    </div>
+
+    <div class="setgrp">
+      <h3>Danger zone</h3>
+      <button class="setrow warn" id="wipeBtn"><div><b>Delete every item</b><p>Clears the list for everyone on it.</p></div></button>
+    </div>
+    <div style="height:150px"></div>
+  </div>
+
+  <!-- ══ Dock ═════════════════════════════════════════════════ -->
+  <div class="dock" id="dock">
+    <div class="quick">
+      <button class="qbtn" id="addBtn">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        Add an item <span>— or type to search above</span>
+      </button>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-tab="packing">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14a1 1 0 0 1 1 1v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9a1 1 0 0 1 1-1Z"/><path d="M9 8V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/><path d="M9.5 14.5 11 16l3.5-3.5"/></svg>
+        Packing
+      </button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="itinerary">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="16" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><circle cx="9" cy="15" r="1.1" fill="currentColor" stroke="none"/></svg>
+        Itinerary
+      </button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="share">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="17.5" cy="6" r="2.8"/><circle cx="6.5" cy="12" r="2.8"/><circle cx="17.5" cy="18" r="2.8"/><path d="m9 10.6 6-3.1M9 13.4l6 3.1"/></svg>
+        Share
+      </button>
+    </nav>
+  </div>
+</div>
+
+<!-- ══ Compose sheet ══════════════════════════════════════════ -->
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="editor" role="dialog" aria-modal="true" aria-labelledby="edTitle">
+  <div class="grip"></div>
+  <div class="shd"><h2 id="edTitle">Add an item</h2><button class="x" id="edClose" aria-label="Close">✕</button></div>
+  <div class="body">
+    <div class="two">
+      <div class="fld">
+        <label for="fName">Item</label>
+        <input type="text" id="fName" placeholder="Start typing…" autocomplete="off" enterkeyhint="done">
+        <div class="ac" id="acName"></div>
+      </div>
+      <div class="fld">
+        <label for="fQty">How many</label>
+        <div class="step"><button id="qtyDown" aria-label="Fewer">−</button><em id="qtyVal">1</em><button id="qtyUp" aria-label="More">+</button></div>
+      </div>
+    </div>
+    <div class="fld">
+      <label for="fCat">Category</label>
+      <input type="text" id="fCat" placeholder="Pick or invent one" autocomplete="off">
+      <div class="ac" id="acCat"></div>
+    </div>
+    <div class="fld">
+      <label for="fNote">Note <span style="text-transform:none;letter-spacing:0;font-weight:500">(optional)</span></label>
+      <input type="text" id="fNote" placeholder="Cabin bag, buy at airport, Ayaan's…" autocomplete="off">
+    </div>
+  </div>
+  <div class="acts">
+    <button class="primary" id="saveBtn">Add to list</button>
+    <p class="hint" id="edHint">Press enter to add and keep going.</p>
+  </div>
+</div>
+
+<!-- ══ Item actions sheet ═════════════════════════════════════ -->
+<div class="sheet" id="actions" role="dialog" aria-modal="true" aria-labelledby="acTitle">
+  <div class="grip"></div>
+  <div class="shd"><h2 id="acTitle">Item</h2><button class="x" id="acClose" aria-label="Close">✕</button></div>
+  <div class="acts">
+    <button class="act" id="aEdit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Edit item</button>
+    <button class="act" id="aDup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>Duplicate</button>
+    <button class="act warn" id="aDel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6.5 7l.8 12a2 2 0 0 0 2 1.9h5.4a2 2 0 0 0 2-1.9l.8-12"/></svg>Delete</button>
+  </div>
+</div>
+
+<!-- ══ Confirm ════════════════════════════════════════════════ -->
+<div class="confirm" id="confirm" role="alertdialog" aria-modal="true">
+  <div class="cbox">
+    <h3 id="cTitle">Delete this?</h3>
+    <p id="cBody">It disappears for everyone on the list.</p>
+    <button class="go" id="cGo">Delete</button>
+    <button class="no" id="cNo">Keep it</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+/* ══════════════════════════════════════════════════════════════
+   1. LIVE SYNC — paste your Firebase config below and every phone
+      with the link updates instantly. Leave it null and the app
+      still works, saved on this device only.
+
+      Get it free (no card) in about three minutes:
+        1. console.firebase.google.com → Add project
+        2. Build → Realtime Database → Create → Start in test mode
+        3. Project settings → Your apps → Web (</>) → register
+        4. Copy the firebaseConfig object it shows you → paste here
+      These values are meant to be public. Access is controlled by
+      the database rules, not by hiding the config.
+   ══════════════════════════════════════════════════════════════ */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCnLbbaGsBUZzaDMMHECXqwipQ_33mUGtc",
+  authDomain: "pictured-rockks.firebaseapp.com",
+  databaseURL: "https://pictured-rockks-default-rtdb.firebaseio.com",
+  projectId: "pictured-rockks",
+  storageBucket: "pictured-rockks.firebasestorage.app",
+  messagingSenderId: "801294781683",
+  appId: "1:801294781683:web:e5cacda276b080dff73b86",
+  measurementId: "G-B1JJ98N5CS"
+};
+/* Example of what to paste:
+const FIREBASE_CONFIG = {
+  apiKey: "AIza…",
+  authDomain: "your-app.firebaseapp.com",
+  databaseURL: "https://your-app-default-rtdb.firebaseio.com",
+  projectId: "your-app",
+  storageBucket: "your-app.appspot.com",
+  messagingSenderId: "000000000000",
+  appId: "1:0000:web:abcdef"
+};
+*/
+
+/* ══ 2. Catalogue — powers autocomplete and category guessing ══ */
+const CAT = {
+  "Documents & money":{icon:"🛂",items:["Passports","Visa printout","Boarding passes","Travel insurance","Driving licence","International driving permit","Vaccination records","Hotel booking confirmations","Emergency contact card","Local currency cash","Credit cards","Backup debit card","Passport photocopies","Child's birth certificate","Spare passport photos","Student card","Loyalty cards"]},
+  "Baby & toddler":{icon:"🍼",items:["Diapers","Baby wipes","Nappy rash cream","Changing mat","Formula powder","Bottles","Bottle brush","Sterilising tablets","Sippy cup","Bibs","Baby food pouches","Baby spoon","Muslin cloths","Baby carrier","Lightweight stroller","Stroller rain cover","Travel cot","Cot sheet","Baby monitor","Baby sunscreen","Baby thermometer","Infant paracetamol","Teething gel","Pacifiers","Comfort blanket","Night light","Portable blackout blind","Swim diapers","Baby toothbrush","Baby nail clippers","Spare outfits","Nursing cover","Breast pump","Bottle cooler bag","High chair harness"]},
+  "Prayer & faith":{icon:"🕌",items:["Prayer mat","Travel prayer mat","Qibla compass","Hijabs","Abaya","Thobe","Tasbih","Quran","Miswak","Portable bidet bottle","Khuff socks","Halal snack stash","Modest swimwear","Dua book","Prayer timetable","Ihram","Prayer clothes","Under-scarf caps","Hijab pins"]},
+  "Clothing":{icon:"👕",items:["T-shirts","Trousers","Jeans","Dresses","Long-sleeve tops","Pyjamas","Underwear","Socks","Bras","Light jacket","Rain jacket","Cardigan","Shoes","Sandals","Trainers","Slippers","Belt","Sunglasses","Sun hat","Scarf","Swimwear","Beach cover-up","Formal outfit","Laundry bag","Loungewear","Leggings"]},
+  "Toiletries":{icon:"🧴",items:["Toothbrush","Toothpaste","Floss","Shampoo","Conditioner","Body wash","Soap bar","Deodorant","Razor","Shaving cream","Moisturiser","Sunscreen","Lip balm","Hairbrush","Hair ties","Hair dryer","Straightener","Makeup bag","Makeup remover","Perfume","Nail clippers","Cotton buds","Tissues","Wet wipes","Hand sanitiser","Period products","Contact lenses","Contact solution","Glasses","Towel","Travel bottles"]},
+  "Health & meds":{icon:"💊",items:["Prescription meds","Painkillers","Antihistamines","Motion sickness tablets","Rehydration salts","Anti-diarrhoea tablets","Plasters","Antiseptic cream","Thermometer","Insect repellent","After-bite cream","Face masks","Vitamins","Inhaler","EpiPen","First aid kit","Eye drops","Throat lozenges","Hand cream","Blister plasters"]},
+  "Tech & charging":{icon:"🔌",items:["Phone charger","Charging cables","Power bank","Travel adapter","Multi-port charger","Headphones","Earbuds","Laptop","Laptop charger","Tablet","Kindle","Camera","Camera charger","Memory cards","Extension lead","AirTag tracker","Portable fan","Offline maps downloaded","eSIM activated","Watch charger"]},
+  "Food & snacks":{icon:"🍫",items:["Halal snacks","Dates","Biscuits","Nuts","Dried fruit","Instant noodles","Tea bags","Coffee sachets","Baby snacks","Water bottles","Collapsible bottle","Reusable cutlery","Snack containers","Chewing gum","Electrolyte sachets","Crisps","Sandwiches for the journey"]},
+  "Bags & packing":{icon:"🎒",items:["Cabin bag","Checked suitcase","Backpack","Daypack","Packing cubes","Luggage scale","Luggage locks","Luggage tags","Foldable tote","Dry bag","Ziplock bags","Bin bags","Shoe bags","Umbrella"]},
+  "Beach & outdoors":{icon:"🏖️",items:["Beach towel","Flip flops","Snorkel set","Armbands","Beach toys","Beach umbrella","Cooler bag","Picnic blanket","Waterproof phone pouch","Hiking shoes","Water shoes","Frisbee"]},
+  "Cold weather":{icon:"🧥",items:["Thermal base layers","Gloves","Winter hat","Wool scarf","Puffer jacket","Wool socks","Ear muffs","Hand warmers","Snow boots","Heavy moisturiser"]},
+  "Kids entertainment":{icon:"🧸",items:["Colouring books","Crayons","Sticker books","Small toys","Card games","Tablet loaded with cartoons","Kids headphones","Surprise snack bag","Kids travel pillow","Story books"]},
+  "Car & transit":{icon:"🚗",items:["Car seat","Car seat adapter","Window sunshade","Travel pillow","Eye mask","Ear plugs","Blanket","Sick bags","Phone mount","Parking app set up","Toll pass"]},
+  "Before we leave":{icon:"🏠",items:["Bins out","Thermostat off","Windows locked","Plants watered","Keys to neighbour","Fridge cleared","Post held","Alarm set","Pet sitter confirmed","Out-of-office on","Bank travel notice"]},
+  "Other":{icon:"✨",items:[]}
+};
+const CAT_NAMES = Object.keys(CAT);
+const LOOKUP = [];
+for(const c of CAT_NAMES) for(const n of CAT[c].items) LOOKUP.push({name:n,cat:c});
+
+const STARTER = ["Passports","Boarding passes","Travel insurance","Local currency cash","Phone charger","Power bank","Travel adapter","Diapers","Baby wipes","Formula powder","Bottles","Baby carrier","Muslin cloths","Baby sunscreen","Infant paracetamol","Portable blackout blind","Prayer mat","Hijabs","Tasbih","Portable bidet bottle","Halal snacks","Prayer timetable","Underwear","Socks","Pyjamas","Shoes","Sunglasses","Toothbrush","Toothpaste","Deodorant","Sunscreen","Prescription meds","Painkillers","First aid kit","Packing cubes","Cabin bag","Dates","Water bottles","Bins out","Windows locked"];
+
+/* ══ 3. Storage — Firebase if configured, else this device ════ */
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+
+const params=new URLSearchParams(location.hash.slice(1));
+const ROOM=(params.get('room')||localStorage.getItem('sunrise:room')||'shared-trip').replace(/[^a-z0-9-]/gi,'').toLowerCase()||'shared-trip';
+localStorage.setItem('sunrise:room',ROOM);
+if(!location.hash) history.replaceState(null,'','#room='+ROOM);
+
+const Store={
+  mode:'local', db:null, fb:null, key:'sunrise:'+ROOM, onData:null, chan:null,
+  async init(cb){
+    this.onData=cb;
+    if(FIREBASE_CONFIG){
+      try{
+        const a=await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js');
+        const d=await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js');
+        this.fb=d; this.db=d.getDatabase(a.initializeApp(FIREBASE_CONFIG));
+        d.onValue(d.ref(this.db,'rooms/'+ROOM),s=>{
+          const v=s.val()||{};
+          cb(v.items||{}, v.name||'Our trip');
+        });
+        this.mode='live'; return;
+      }catch(e){ console.warn('Live sync unavailable, staying local.',e); }
+    }
+    // local mode — still syncs live between tabs on this device
+    try{ this.chan=new BroadcastChannel('sunrise:'+ROOM); this.chan.onmessage=()=>this.read(); }catch(e){}
+    addEventListener('storage',e=>{ if(e.key===this.key) this.read(); });
+    this.read();
+  },
+  read(){ const raw=localStorage.getItem(this.key); const v=raw?JSON.parse(raw):{}; this.onData(v.items||{}, v.name||'Our trip'); },
+  local(){ const raw=localStorage.getItem(this.key); return raw?JSON.parse(raw):{items:{},name:'Our trip'}; },
+  flush(v){ localStorage.setItem(this.key,JSON.stringify(v)); try{this.chan&&this.chan.postMessage(1)}catch(e){} this.onData(v.items||{},v.name); },
+  put(id,item){
+    if(this.mode==='live') return this.fb.update(this.fb.ref(this.db,'rooms/'+ROOM+'/items'),{[id]:item});
+    const v=this.local(); v.items[id]=item; this.flush(v);
+  },
+  putMany(map){
+    if(this.mode==='live') return this.fb.update(this.fb.ref(this.db,'rooms/'+ROOM+'/items'),map);
+    const v=this.local(); Object.assign(v.items,map); this.flush(v);
+  },
+  del(id){
+    if(this.mode==='live') return this.fb.remove(this.fb.ref(this.db,'rooms/'+ROOM+'/items/'+id));
+    const v=this.local(); delete v.items[id]; this.flush(v);
+  },
+  wipe(){
+    if(this.mode==='live') return this.fb.remove(this.fb.ref(this.db,'rooms/'+ROOM+'/items'));
+    const v=this.local(); v.items={}; this.flush(v);
+  },
+  rename(n){
+    if(this.mode==='live') return this.fb.set(this.fb.ref(this.db,'rooms/'+ROOM+'/name'),n);
+    const v=this.local(); v.name=n; this.flush(v);
+  }
+};
+
+/* ══ 4. State + render ═══════════════════════════════════════ */
+const S={items:{},name:'Our trip',q:'',cat:'all',hide:false,shut:new Set(JSON.parse(localStorage.getItem('sunrise:shut')||'[]'))};
+
+const norm=s=>s.toLowerCase().trim();
+function guessCat(name){
+  const n=norm(name); if(!n) return '';
+  let best=null;
+  for(const e of LOOKUP){ const t=norm(e.name);
+    if(t===n) return e.cat;
+    if(t.includes(n)||n.includes(t)){ const score=Math.min(t.length,n.length)/Math.max(t.length,n.length); if(!best||score>best.s) best={c:e.cat,s:score}; }
+  }
+  return best&&best.s>.45?best.c:'';
+}
+
+function visible(){
+  const q=norm(S.q);
+  return Object.entries(S.items)
+    .map(([id,it])=>({id,...it}))
+    .filter(it=>{
+      if(S.hide&&it.packed) return false;
+      if(S.cat!=='all'&&it.cat!==S.cat) return false;
+      if(q&&!(norm(it.name).includes(q)||norm(it.cat).includes(q)||norm(it.note||'').includes(q))) return false;
+      return true;
+    })
+    .sort((a,b)=>(a.packed-b.packed)||a.name.localeCompare(b.name));
+}
+
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+
+function paintHorizon(){
+  const all=Object.values(S.items), done=all.filter(i=>i.packed).length;
+  const t=all.length?done/all.length:0;
+  // point on the quadratic bezier the trail is drawn along
+  const p0=[22,82],p1=[160,-26],p2=[298,82],u=1-t;
+  const x=u*u*p0[0]+2*u*t*p1[0]+t*t*p2[0];
+  const y=u*u*p0[1]+2*u*t*p1[1]+t*t*p2[1];
+  $('#sun').setAttribute('cx',x); $('#sun').setAttribute('cy',y);
+  $('#sunHalo').setAttribute('cx',x); $('#sunHalo').setAttribute('cy',y);
+  $('#sun').style.transition=$('#sunHalo').style.transition='cx .6s cubic-bezier(.32,.72,0,1), cy .6s cubic-bezier(.32,.72,0,1)';
+  const path=$('#trailPath'), L=path.getTotalLength();
+  path.style.strokeDasharray=L; path.style.strokeDashoffset=L*(1-t);
+  path.style.transition='stroke-dashoffset .6s cubic-bezier(.32,.72,0,1)';
+  $('#pct').innerHTML=Math.round(t*100)+'<small>% packed</small>';
+  $('#statR').textContent=all.length? `${done} of ${all.length} done · ${all.length-done} to go` : 'Nothing on the list yet';
+}
+
+function paintChips(){
+  const counts={};
+  for(const it of Object.values(S.items)) counts[it.cat]=(counts[it.cat]||0)+1;
+  const used=CAT_NAMES.filter(c=>counts[c]).concat(Object.keys(counts).filter(c=>!CAT_NAMES.includes(c)));
+  const total=Object.keys(S.items).length;
+  $('#chips').innerHTML=[`<button class="chip" data-cat="all" aria-pressed="${S.cat==='all'}">Everything<b>${total}</b></button>`]
+    .concat(used.map(c=>`<button class="chip" data-cat="${esc(c)}" aria-pressed="${S.cat===c}">${(CAT[c]||{}).icon||'✨'} ${esc(c)}<b>${counts[c]}</b></button>`)).join('');
+}
+
+function paintList(){
+  const items=visible(), box=$('#list');
+  if(!Object.keys(S.items).length){
+    box.innerHTML=`<div class="blank"><div class="orb"></div><h2>An empty bag</h2>
+      <p>Add things one at a time, or drop in a ready-made set covering documents, the baby, prayer, clothes and the house.</p>
+      <button class="solid" id="seedBtn">Add 40 essentials</button></div>`;
+    $('#seedBtn').onclick=seed; return;
+  }
+  if(!items.length){
+    box.innerHTML=`<div class="blank"><div class="orb" style="opacity:.35"></div><h2>Nothing matches</h2>
+      <p>${S.q?`No item called “${esc(S.q)}”.`:'Every item here is packed already.'} Change the filters, or add it as a new item.</p>
+      ${S.q?'<button class="solid" id="addFromSearch">Add “'+esc(S.q)+'”</button>':''}</div>`;
+    const b=$('#addFromSearch'); if(b) b.onclick=()=>openEditor(null,S.q);
+    return;
+  }
+  const groups={};
+  for(const it of items) (groups[it.cat]=groups[it.cat]||[]).push(it);
+  const order=CAT_NAMES.filter(c=>groups[c]).concat(Object.keys(groups).filter(c=>!CAT_NAMES.includes(c)));
+  box.innerHTML=order.map(c=>{
+    const g=groups[c], done=g.filter(i=>i.packed).length, shut=S.shut.has(c);
+    return `<section class="sect${shut?' shut':''}" data-cat="${esc(c)}">
+      <button class="shead" data-fold="${esc(c)}">
+        <span class="sicon">${(CAT[c]||{}).icon||'✨'}</span>
+        <span class="stitle"><span>${esc(c)}</span><span class="bar"><i style="width:${g.length?done/g.length*100:0}%"></i></span></span>
+        <span class="scount">${done}/${g.length}</span>
+        <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <div class="rows">${g.map(it=>`
+        <div class="row${it.packed?' done':''}" data-id="${it.id}">
+          <button class="tick" data-tick="${it.id}" aria-label="Mark ${esc(it.name)} packed" aria-pressed="${!!it.packed}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.5 5 5 10-11"/></svg>
+          </button>
+          <button class="face" data-edit="${it.id}">
+            <span style="min-width:0"><span class="name">${esc(it.name)}</span>${it.note?`<span class="note">${esc(it.note)}</span>`:''}</span>
+            ${it.qty>1?`<span class="qty">×${it.qty}</span>`:''}
+          </button>
+          <button class="more" data-more="${it.id}" aria-label="Options for ${esc(it.name)}">
+            <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>
+          </button>
+        </div>`).join('')}</div>
+    </section>`;
+  }).join('');
+}
+
+function paintAll(){ paintHorizon(); paintChips(); paintList(); $('#tripName').textContent=S.name; $('#nameVal').textContent=S.name; }
+
+/* ══ 5. Actions ══════════════════════════════════════════════ */
+function toggle(id){
+  const it=S.items[id]; if(!it) return;
+  const next={...it,packed:!it.packed};
+  S.items[id]=next;
+  const row=document.querySelector(`.row[data-id="${id}"]`);
+  if(row){ row.classList.toggle('done',next.packed); row.querySelector('.tick').setAttribute('aria-pressed',next.packed); }
+  paintHorizon();
+  const sec=row&&row.closest('.sect');
+  if(sec){ const rows=[...sec.querySelectorAll('.row')], d=rows.filter(r=>r.classList.contains('done')).length;
+    sec.querySelector('.scount').textContent=`${d}/${rows.length}`; sec.querySelector('.bar i').style.width=(d/rows.length*100)+'%'; }
+  Store.put(id,next);
+  if(S.hide&&next.packed) setTimeout(paintList,300);
+}
+function seed(){
+  const map={};
+  for(const n of STARTER){ const id=uid(); map[id]={name:n,cat:guessCat(n)||'Other',qty:1,note:'',packed:false,ts:Date.now()}; }
+  Store.putMany(map); toast('40 essentials added');
+}
+
+/* ══ 6. Sheets ═══════════════════════════════════════════════ */
+let editing=null, qty=1, actionId=null, confirmFn=null;
+const scrim=$('#scrim');
+function openSheet(el){ scrim.classList.add('on'); el.classList.add('on'); }
+function closeSheets(){ scrim.classList.remove('on'); $('#editor').classList.remove('on'); $('#actions').classList.remove('on'); hideAc(); }
+scrim.onclick=closeSheets; $('#edClose').onclick=closeSheets; $('#acClose').onclick=closeSheets;
+
+function openEditor(id,prefill){
+  editing=id;
+  const it=id?S.items[id]:null;
+  $('#edTitle').textContent=id?'Edit item':'Add an item';
+  $('#saveBtn').textContent=id?'Save changes':'Add to list';
+  $('#edHint').textContent=id?'Changes show up on everyone’s phone right away.':'Press enter to add and keep going.';
+  $('#fName').value=it?it.name:(prefill||'');
+  $('#fCat').value=it?it.cat:(prefill?guessCat(prefill):'');
+  $('#fNote').value=it?(it.note||''):'';
+  qty=it?(it.qty||1):1; $('#qtyVal').textContent=qty;
+  openSheet($('#editor'));
+  setTimeout(()=>{$('#fName').focus(); if(!id&&!prefill) $('#fName').select();},380);
+}
+$('#addBtn').onclick=()=>openEditor(null);
+$('#qtyUp').onclick=()=>{qty=Math.min(99,qty+1);$('#qtyVal').textContent=qty};
+$('#qtyDown').onclick=()=>{qty=Math.max(1,qty-1);$('#qtyVal').textContent=qty};
+
+function save(keepOpen){
+  const name=$('#fName').value.trim(); if(!name) return $('#fName').focus();
+  const cat=$('#fCat').value.trim()||guessCat(name)||'Other';
+  const item={name,cat,qty,note:$('#fNote').value.trim(),packed:editing?!!S.items[editing].packed:false,ts:editing?S.items[editing].ts:Date.now()};
+  Store.put(editing||uid(),item);
+  toast(editing?'Saved':`“${name}” added`);
+  if(editing||!keepOpen){ closeSheets(); return; }
+  $('#fName').value=''; $('#fNote').value=''; qty=1; $('#qtyVal').textContent=1; $('#fName').focus();
+}
+$('#saveBtn').onclick=()=>save(false);
+$('#fName').addEventListener('keydown',e=>{
+  if(e.key!=='Enter') return;
+  if(acOpen()&&acIdx>-1) return;   // a suggestion is highlighted — let it be chosen instead
+  e.preventDefault(); hideAc(); save(true);
+});
+$('#fNote').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); save(true); } });
+$('#fName').addEventListener('input',()=>{ const g=guessCat($('#fName').value); if(g&&!$('#fCat').value.trim()) $('#fCat').value=g; });
+
+/* autocomplete */
+let acEl=null, acIdx=-1, acRows=[];
+const acOpen=()=>acEl&&acEl.classList.contains('on');
+function hideAc(){ if(acEl) acEl.classList.remove('on'); acEl=null; acIdx=-1; acRows=[]; }
+function hi(text,q){ const i=norm(text).indexOf(norm(q)); if(i<0||!q) return esc(text);
+  return esc(text.slice(0,i))+'<mark>'+esc(text.slice(i,i+q.length))+'</mark>'+esc(text.slice(i+q.length)); }
+
+function wireAc(input,panel,source){
+  input.addEventListener('input',()=>{
+    const q=norm(input.value);
+    if(!q){ panel.classList.remove('on'); return; }
+    const hits=source(q).slice(0,7);
+    if(!hits.length){ panel.classList.remove('on'); return; }
+    acEl=panel; acRows=hits; acIdx=-1;
+    panel.innerHTML=hits.map((h,i)=>`<button data-i="${i}"><em>${h.icon}</em><span>${hi(h.label,input.value.trim())}</span>${h.tail?`<i>${esc(h.tail)}</i>`:''}</button>`).join('');
+    panel.classList.add('on');
+  });
+  input.addEventListener('keydown',e=>{
+    if(!acOpen()||acEl!==panel) return;
+    if(e.key==='ArrowDown'||e.key==='ArrowUp'){ e.preventDefault();
+      acIdx=(acIdx+(e.key==='ArrowDown'?1:-1)+acRows.length)%acRows.length;
+      [...panel.children].forEach((b,i)=>b.classList.toggle('sel',i===acIdx)); }
+    else if(e.key==='Enter'&&acIdx>-1){ e.preventDefault(); pick(acRows[acIdx]); }
+    else if(e.key==='Escape'){ hideAc(); }
+  });
+  panel.addEventListener('mousedown',e=>{ const b=e.target.closest('button'); if(b){ e.preventDefault(); pick(acRows[+b.dataset.i]); } });
+  input.addEventListener('blur',()=>setTimeout(()=>{ if(acEl===panel) hideAc(); },150));
+  function pick(h){ input.value=h.label; hideAc(); h.after&&h.after(); }
+}
+wireAc($('#fName'),$('#acName'),q=>{
+  const seen=new Set(Object.values(S.items).map(i=>norm(i.name)));
+  return LOOKUP.filter(e=>norm(e.name).includes(q)&&!seen.has(norm(e.name)))
+    .sort((a,b)=>norm(a.name).indexOf(q)-norm(b.name).indexOf(q))
+    .map(e=>({label:e.name,icon:CAT[e.cat].icon,tail:e.cat,after:()=>{$('#fCat').value=e.cat;$('#fNote').focus();}}));
+});
+wireAc($('#fCat'),$('#acCat'),q=>{
+  const custom=[...new Set(Object.values(S.items).map(i=>i.cat))].filter(c=>!CAT_NAMES.includes(c));
+  return CAT_NAMES.concat(custom).filter(c=>norm(c).includes(q))
+    .map(c=>({label:c,icon:(CAT[c]||{}).icon||'✨',tail:CAT[c]?`${CAT[c].items.length} known items`:'your category'}));
+});
+
+/* item actions */
+function openActions(id){
+  actionId=id; $('#acTitle').textContent=S.items[id].name; openSheet($('#actions'));
+}
+$('#aEdit').onclick=()=>{ const id=actionId; closeSheets(); setTimeout(()=>openEditor(id),260); };
+$('#aDup').onclick=()=>{ const it=S.items[actionId]; Store.put(uid(),{...it,packed:false,ts:Date.now()}); closeSheets(); toast('Duplicated'); };
+$('#aDel').onclick=()=>{ const it=S.items[actionId], id=actionId; closeSheets();
+  setTimeout(()=>ask(`Delete “${it.name}”?`,'It disappears for everyone on this list.','Delete',()=>{Store.del(id);toast('Deleted');}),260); };
+
+/* confirm dialog */
+function ask(title,body,go,fn){
+  $('#cTitle').textContent=title; $('#cBody').textContent=body; $('#cGo').textContent=go;
+  confirmFn=fn; $('#confirm').classList.add('on');
+}
+$('#cNo').onclick=()=>$('#confirm').classList.remove('on');
+$('#confirm').onclick=e=>{ if(e.target===$('#confirm')) $('#confirm').classList.remove('on'); };
+$('#cGo').onclick=()=>{ $('#confirm').classList.remove('on'); confirmFn&&confirmFn(); };
+
+let tt;
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(tt); tt=setTimeout(()=>t.classList.remove('on'),2100); }
+
+/* ══ 7. Wiring ═══════════════════════════════════════════════ */
+$('#list').addEventListener('click',e=>{
+  const t=e.target.closest('[data-tick]'); if(t) return toggle(t.dataset.tick);
+  const ed=e.target.closest('[data-edit]'); if(ed) return openEditor(ed.dataset.edit);
+  const m=e.target.closest('[data-more]'); if(m) return openActions(m.dataset.more);
+  const f=e.target.closest('[data-fold]');
+  if(f){ const c=f.dataset.fold; S.shut.has(c)?S.shut.delete(c):S.shut.add(c);
+    localStorage.setItem('sunrise:shut',JSON.stringify([...S.shut]));
+    f.closest('.sect').classList.toggle('shut'); }
+});
+$('#chips').addEventListener('click',e=>{ const c=e.target.closest('.chip'); if(!c) return; S.cat=c.dataset.cat; paintChips(); paintList(); });
+$('#q').addEventListener('input',e=>{ S.q=e.target.value; $('#searchBox').classList.toggle('has',!!S.q); paintList(); });
+$('#qClear').onclick=()=>{ S.q=''; $('#q').value=''; $('#searchBox').classList.remove('has'); paintList(); $('#q').focus(); };
+$('#hideBtn').onclick=e=>{ S.hide=!S.hide; e.currentTarget.setAttribute('aria-pressed',S.hide); paintList(); };
+
+$$('.tab').forEach(b=>b.onclick=()=>{
+  $$('.tab').forEach(x=>x.setAttribute('aria-selected',x===b));
+  $$('.pane').forEach(p=>p.classList.toggle('on',p.id==='pane-'+b.dataset.tab));
+  $('#app').classList.toggle('pane-packing-on',b.dataset.tab==='packing');
+});
+$('#app').classList.add('pane-packing-on');
+
+$('#roomTag').textContent='#'+ROOM;
+$('#copyBtn').onclick=async()=>{
+  const url=location.origin+location.pathname+'#room='+ROOM;
+  try{ await navigator.clipboard.writeText(url); toast('Invite link copied'); }
+  catch(e){ prompt('Copy this link:',url); }
+};
+$('#renameBtn').onclick=()=>{ const n=prompt('Name this trip',S.name); if(n&&n.trim()) Store.rename(n.trim()); };
+$('#joinBtn').onclick=()=>{ const r=prompt('Room code to join',ROOM); if(r&&r.trim()){ location.hash='room='+r.trim().replace(/[^a-z0-9-]/gi,'').toLowerCase(); location.reload(); } };
+$('#wipeBtn').onclick=()=>ask('Delete every item?','The whole list is cleared for everyone. This cannot be undone.','Delete everything',()=>{Store.wipe();toast('List cleared');});
+
+/* ══ 8. Go ═══════════════════════════════════════════════════ */
+Store.init((items,name)=>{ S.items=items||{}; S.name=name||'Our trip'; paintAll(); }).then(()=>{
+  const live=Store.mode==='live';
+  $('#syncPill').dataset.mode=live?'live':'local';
+  $('#syncTxt').textContent=live?'Live · everyone':'On this device';
+  $('#modeTitle').textContent=live?'Live sync is on':'Saved on this device';
+  $('#modeBody').textContent=live
+    ? `Every edit lands on everyone's phone in about a second. Room code: ${ROOM}`
+    : 'This list lives in this browser and syncs between its tabs. To sync across phones, paste a Firebase config into the block at the top of index.html.';
+});
+addEventListener('hashchange',()=>location.reload());
+</script>
+</body>
+</html>
