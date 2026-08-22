@@ -1,6 +1,6 @@
-/* Sunrise service worker — offline shell + notification host.
+/* Backpacker service worker — offline shell + notification host.
    Bump CACHE when you change index.html, or phones keep the old copy. */
-const CACHE = 'sunrise-v5';
+const CACHE = 'backpacker-v6';
 
 const SHELL = [
   './',
@@ -84,11 +84,11 @@ self.addEventListener('fetch', e => {
 self.addEventListener('message', e => {
   const d = e.data || {};
   if (d.type !== 'notify') return;
-  self.registration.showNotification(d.title || 'Sunrise', {
+  self.registration.showNotification(d.title || 'Backpacker', {
     body: d.body || '',
     icon: './icon-192.png',
     badge: './icon-192.png',
-    tag: 'sunrise-changes',       // replaces rather than stacks
+    tag: 'backpacker-changes',       // replaces rather than stacks
     renotify: false,
     silent: false,
     data: { url: d.url || './' }

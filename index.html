@@ -3,18 +3,31 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5">
-<meta name="theme-color" content="#7B3FE4" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#14101C" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" id="tcMeta" content="#7B3FE4">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Sunrise">
+<meta name="apple-mobile-web-app-title" content="Backpacker">
 <meta name="description" content="Shared packing list and itinerary for Pictured Rocks, Sep 4–7 2026.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="favicon-32.png" sizes="32x32">
 <link rel="icon" href="icon-192.png" sizes="192x192">
-<title>Sunrise — Pictured Rocks</title>
+<title>Backpacker — Pictured Rocks</title>
+<script>
+/* Day or night is settled before the first paint, so the app never flashes
+   the wrong sky. 'system' follows the phone; 'day'/'night' override it. */
+(function(){
+ try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);
+  if(k&&k.indexOf('sunrise:')===0){var n='backpacker:'+k.slice(8);
+   if(localStorage.getItem(n)===null)localStorage.setItem(n,localStorage.getItem(k))}}}catch(e){}
+ var pref='system';try{pref=localStorage.getItem('backpacker:theme')||'system'}catch(e){}
+ var dark=pref==='night'||(pref==='system'&&matchMedia('(prefers-color-scheme:dark)').matches);
+ var r=document.documentElement;
+ r.dataset.theme=dark?'dark':'light';r.dataset.themePref=pref;
+ r.style.colorScheme=dark?'dark':'light';
+})();
+</script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <style>
@@ -29,52 +42,89 @@
   --line:rgba(36,23,51,.09); --line-2:rgba(36,23,51,.05);
   --shadow:0 1px 2px rgba(36,23,51,.05),0 8px 24px -12px rgba(36,23,51,.18);
   --shadow-lg:0 24px 60px -18px rgba(59,30,110,.34);
-  --scrim:rgba(36,23,51,.34); --glass:rgba(255,248,245,.84);
+  --scrim:rgba(36,23,51,.34); --glass:rgba(255,248,245,.86); --glass-2:rgba(255,248,245,.52); --glass-0:rgba(255,248,245,0);
   --ramp:linear-gradient(90deg,var(--sun-1),var(--sun-2) 34%,var(--sun-3) 66%,var(--sun-4));
+  /* one sky, poured down the page: night at the status bar, coral at the
+     horizon, dissolving into the canvas the cards sit on */
+  --sky-a:#3B1E6E; --sky-b:#7B3FE4; --sky-c:#E0417F; --sky-d:#FF7E63;
+  --sky-warm:rgba(255,184,107,.42);
+  --sky-stop:80%;
+  --sky-grad:radial-gradient(120% 62% at 84% -6%,var(--sky-warm),transparent 62%),
+             linear-gradient(180deg,var(--sky-a) 0%,var(--sky-b) 26%,var(--sky-c) 56%,var(--sky-d) var(--sky-stop),var(--canvas) 100%);
+  --sky-ink:#fff; --sky-veil:rgba(255,255,255,.14); --sky-edge:rgba(255,255,255,.2);
+  --toast-act:#FFB86B;
+  --danger:#E03B3B; --danger-solid:#E03B3B; --mark:var(--sun-3); --nav-on:var(--sun-4);
+  --fix-ink:var(--sun-4); --fix-bg:rgba(123,63,228,.13);
   --r-md:16px; --r-lg:22px; --r-xl:28px;
   --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",sans-serif;
   --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace;
   --ease:cubic-bezier(.32,.72,0,1);
+  --spring:cubic-bezier(.2,.9,.25,1.02);
   --safe-b:env(safe-area-inset-bottom,0px); --safe-t:env(safe-area-inset-top,0px);
-  --itbarH:104px;
+  --itbarH:104px; --aura:440px;
   /* paper map palette — warm white land, cool shallow water */
   --map-land:#FBF4EC; --map-land-2:#F5EADD; --map-water:#CBE1EA; --map-water-2:#B4D3E0;
   --map-shore:#8FB6C6; --map-road:#EADFD0; --map-road-ink:#FFFFFF; --map-road-2:#DFCAAC;
   --map-ink:#6B5B4D; --map-ink-2:#A08E7C; --map-wet-ink:#5B8CA0;
 }
-@media (prefers-color-scheme:dark){:root{
+:root[data-theme="dark"]{
   --canvas:#14101C; --card:#1E1830; --card-2:#241C39;
   --ink:#F6F0FA; --ink-2:#A99BBC; --ink-3:#7C6E90;
   --line:rgba(255,255,255,.10); --line-2:rgba(255,255,255,.06);
   --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
   --shadow-lg:0 24px 60px -18px rgba(0,0,0,.7);
-  --scrim:rgba(8,5,14,.6); --glass:rgba(20,16,28,.84);
+  --scrim:rgba(8,5,14,.6); --glass:rgba(20,16,28,.86); --glass-2:rgba(20,16,28,.5); --glass-0:rgba(20,16,28,0);
+  /* the same sky after sunset — the ramp survives, the light drops out */
+  --sky-a:#0F0B1A; --sky-b:#2A1550; --sky-c:#6B2A6E; --sky-d:#8E3A5C;
+  --sky-warm:rgba(255,140,90,.22);
+  --sky-ink:#F6F0FA; --sky-veil:rgba(255,255,255,.09); --sky-edge:rgba(255,255,255,.12);
+  --toast-act:#7B3FE4;
+  --danger:#FF7A7A; --danger-solid:#D8423C; --mark:var(--sun-1); --nav-on:var(--sun-1);
+  --fix-ink:var(--sun-1); --fix-bg:rgba(255,184,107,.14);
   --map-land:#241D33; --map-land-2:#2C2440; --map-water:#152A3D; --map-water-2:#0F2233;
   --map-shore:#3E6C86; --map-road:#3A3050; --map-road-ink:#4C4066; --map-road-2:#332B48;
   --map-ink:#B6A6C6; --map-ink-2:#8B7C9C; --map-wet-ink:#6E9EB8;
-}}
+}
 *,*::before,*::after{box-sizing:border-box}
 html,body{margin:0;height:100%}
 body{font-family:var(--font);background:var(--canvas);color:var(--ink);-webkit-font-smoothing:antialiased;overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent}
 button,input{font:inherit;color:inherit}
 button{border:0;background:none;cursor:pointer;padding:0}
 :focus-visible{outline:2.5px solid var(--sun-3);outline-offset:2px;border-radius:6px}
+
+/* Scrolling stays, the bar goes. Every scroller in the app is either
+   swiped or has its own affordance, so the track is noise. */
+*{scrollbar-width:none;-ms-overflow-style:none}
+*::-webkit-scrollbar{width:0;height:0;display:none}
+
+/* Day↔night eases rather than snaps — an abrupt brightness jump is jarring
+   at night, which is exactly when the switch gets used. */
+.themeshift,.themeshift *{transition:background-color .38s var(--ease),color .38s var(--ease),border-color .38s var(--ease)!important}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+@media (prefers-reduced-transparency:reduce){
+  .controls,.itbar,.dock,.mapwrap,.mapnow,.mapzoom,.sync,.cdown{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+  .controls,.itbar,.dock{background:var(--canvas)}
+}
 
 /* ═══ SHELL ════════════════════════════════════════════════════ */
 .app{display:flex;flex-direction:column;height:100dvh;max-width:640px;margin:0 auto;position:relative;overflow:hidden}
-.pane{flex:1;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;display:none}
+/* The sky is painted by the scroller itself, not by the header, so the
+   gradient runs straight through the tracker and out under the first cards
+   before it settles into the canvas. One surface, no seam. */
+.pane{flex:1;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;display:none;
+ background-color:var(--canvas);background-image:var(--sky-grad);background-repeat:no-repeat;background-size:100% var(--aura)}
 .pane.on{display:block}
 .wrap{padding-bottom:calc(150px + var(--safe-b))}
 
 /* ═══ SKY + HORIZON (signature) ════════════════════════════════ */
-.sky{position:relative;padding:calc(var(--safe-t) + 14px) 20px 0;background:linear-gradient(168deg,var(--sun-5),var(--sun-4) 42%,var(--sun-3) 78%,var(--sun-2));color:#fff;overflow:hidden}
-.brow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.sky{position:relative;padding:calc(var(--safe-t) + 14px) 20px 0;color:var(--sky-ink)}
+.brow{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.browR{display:flex;align-items:center;gap:8px;flex:none}
 .trip{display:flex;align-items:baseline;gap:9px;min-width:0}
 .trip h1{margin:0;font-size:19px;font-weight:680;letter-spacing:-.022em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .room{font:500 11px/1 var(--mono);opacity:.62;letter-spacing:.04em;white-space:nowrap}
 .sky p.lede{margin:13px 2px 0;font-size:14px;line-height:1.55;opacity:.86;max-width:44ch}
-.cdown{position:relative;display:inline-flex;align-items:baseline;gap:7px;margin-top:13px;padding:8px 15px 9px;border-radius:999px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.2);overflow:hidden;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);white-space:nowrap;max-width:100%}
+.cdown{position:relative;display:inline-flex;align-items:baseline;gap:7px;margin-top:13px;padding:8px 15px 9px;border-radius:999px;background:var(--sky-veil);border:1px solid var(--sky-edge);overflow:hidden;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);white-space:nowrap;max-width:100%}
 .cdown b{font:700 16.5px/1 var(--font);letter-spacing:-.03em;font-variant-numeric:tabular-nums}
 .cdown .cdu{font-size:11.5px;font-weight:600;opacity:.72;margin-left:-3px;letter-spacing:.01em}
 .cdown em{font:600 15px/1 var(--mono);font-style:normal;font-variant-numeric:tabular-nums;letter-spacing:-.03em}
@@ -83,9 +133,20 @@ button{border:0;background:none;cursor:pointer;padding:0}
 .cdown.past{opacity:.8}
 .cdown.past b,.cdown.past em,.cdown.past .cdu{display:none}
 @media (max-width:360px){.cdown .cdl{display:none}}
-.sync{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:560;padding:6px 11px 6px 9px;border-radius:999px;background:rgba(255,255,255,.15);backdrop-filter:blur(12px);white-space:nowrap}
-.dot{width:6px;height:6px;border-radius:50%;background:#6EE7A8;animation:pulse 2.6s var(--ease) infinite}
+.sync{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:560;padding:6px 11px 6px 9px;border-radius:999px;background:var(--sky-veil);border:1px solid var(--sky-edge);backdrop-filter:blur(12px);white-space:nowrap;min-width:0}
+.sync span:last-child{overflow:hidden;text-overflow:ellipsis}
+.dot{flex:none;width:6px;height:6px;border-radius:50%;background:#6EE7A8;animation:pulse 2.6s var(--ease) infinite}
 .sync[data-mode="local"] .dot{background:#FFD166;animation:none}
+.sync[data-mode="off"] .dot{background:#FF8B7A;animation:none}
+/* day / night, in the corner of the sky it changes */
+.skybtn{flex:none;width:33px;height:33px;border-radius:50%;display:grid;place-items:center;color:var(--sky-ink);
+ background:var(--sky-veil);border:1px solid var(--sky-edge);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+ transition:transform .2s var(--spring),background .2s var(--ease)}
+.skybtn svg{width:17px;height:17px;transition:transform .45s var(--spring),opacity .25s var(--ease)}
+.skybtn:active{transform:scale(.9)}
+.skybtn .moon{display:none}
+:root[data-theme="dark"] .skybtn .sun{display:none}
+:root[data-theme="dark"] .skybtn .moon{display:block}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(110,231,168,.55)}70%{box-shadow:0 0 0 7px rgba(110,231,168,0)}100%{box-shadow:0 0 0 0 rgba(110,231,168,0)}}
 .horizon{display:block;width:100%;height:104px;margin-top:2px}
 .stat{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;padding:0 2px 16px}
@@ -94,7 +155,9 @@ button{border:0;background:none;cursor:pointer;padding:0}
 .stat-r{font-size:12.5px;font-weight:520;opacity:.78;text-align:right;line-height:1.45;padding-bottom:5px}
 
 /* ═══ CONTROLS ═════════════════════════════════════════════════ */
-.controls{position:sticky;top:0;z-index:20;background:var(--glass);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--line-2)}
+.controls{position:sticky;top:0;z-index:20;background:linear-gradient(180deg,var(--glass-0),var(--glass-2) 38%,var(--glass) 78%);-webkit-backdrop-filter:saturate(180%) blur(20px)}
+.controls::after,.itbar::after{content:"";position:absolute;left:0;right:0;top:100%;height:14px;pointer-events:none;
+ background:linear-gradient(var(--glass-2),transparent)}
 .searchwrap{padding:11px 16px 9px;display:flex;gap:9px;align-items:center}
 .search{flex:1;position:relative;display:flex;align-items:center}
 .search svg{position:absolute;left:11px;width:16px;height:16px;color:var(--ink-3);pointer-events:none}
@@ -149,7 +212,7 @@ button{border:0;background:none;cursor:pointer;padding:0}
 .seg{display:flex;gap:3px;padding:3px;background:var(--card-2);border-radius:12px;border:1px solid var(--line)}
 .seg button{flex:1;padding:8px 14px;border-radius:9px;font-size:13.5px;font-weight:560;color:var(--ink-2);transition:.22s var(--ease)}
 .seg button[aria-pressed="true"]{background:var(--card);color:var(--ink);box-shadow:var(--shadow)}
-.itbar{position:sticky;top:0;z-index:20;background:var(--glass);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--line-2);padding:10px 16px}
+.itbar{position:sticky;top:0;z-index:20;background:linear-gradient(180deg,var(--glass-0),var(--glass-2) 38%,var(--glass) 78%);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);padding:10px 16px}
 .itbar .seg{margin-bottom:9px}
 .days{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none}
 .days::-webkit-scrollbar{display:none}
@@ -181,15 +244,14 @@ button{border:0;background:none;cursor:pointer;padding:0}
 .scard h3 em{font-style:normal;font-size:16px}
 .scard p{margin:6px 0 0;font-size:13.5px;line-height:1.55;color:var(--ink-2)}
 .badge{font:600 9.5px/1 var(--font);letter-spacing:.07em;text-transform:uppercase;padding:4px 7px;border-radius:5px}
-.badge.fix{background:rgba(123,63,228,.13);color:var(--sun-4)}
+.badge.fix{background:var(--fix-bg);color:var(--fix-ink)}
 .badge.opt{background:var(--card-2);color:var(--ink-3);border:1px solid var(--line)}
-@media (prefers-color-scheme:dark){.badge.fix{color:var(--sun-1);background:rgba(255,184,107,.14)}}
 .alerts{padding:4px 16px 0}
 .alert{display:flex;gap:11px;padding:13px 15px;margin-bottom:9px;background:var(--card);border-radius:var(--r-md);box-shadow:var(--shadow);border-left:3px solid var(--sun-2)}
 .alert em{font-style:normal;font-size:16px;flex:none}
 .alert b{display:block;font-size:14px;font-weight:620;letter-spacing:-.015em;margin-bottom:3px}
 .alert span{font-size:13px;line-height:1.55;color:var(--ink-2)}
-.mapwrap{position:sticky;top:var(--itbarH);z-index:15;background:var(--canvas);padding:12px 16px 10px;border-bottom:1px solid var(--line-2)}
+.mapwrap{position:sticky;top:var(--itbarH);z-index:15;background:var(--glass);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);padding:12px 16px 10px}
 .mapcard{position:relative;border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow);background:var(--map-land);border:1px solid var(--line)}
 .mapcard>svg{display:block;width:100%;height:auto}
 /* Leaflet draws routes into its own <svg> and puts a flag in the
@@ -227,8 +289,7 @@ button{border:0;background:none;cursor:pointer;padding:0}
 .mini{padding:7px 11px;border-radius:9px;background:var(--card-2);border:1px solid var(--line);font-size:12.5px;font-weight:560;color:var(--ink-2);transition:.16s var(--ease)}
 .mini:active{transform:scale(.96)}
 .mini[disabled]{opacity:.34}
-.mini.warn{color:#E03B3B}
-@media (prefers-color-scheme:dark){.mini.warn{color:#FF7A7A}}
+.mini.warn{color:var(--danger)}
 .addstop{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin:2px 0 14px;padding:13px;border-radius:var(--r-md);border:1.5px dashed var(--line);background:none;font-size:14px;font-weight:560;color:var(--ink-2)}
 .addstop:active{background:var(--card-2)}
 .tl .addstop{margin-left:81px;width:auto;min-width:0}
@@ -240,8 +301,7 @@ button{border:0;background:none;cursor:pointer;padding:0}
 .pick button{flex:1;padding:11px 6px;border-radius:11px;border:1px solid var(--line);background:var(--card-2);font-size:13px;font-weight:560;color:var(--ink-2)}
 .pick button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--canvas)}
 .sheet .body{max-height:min(60vh,540px);overflow-y:auto}
-.linkbtn{width:100%;padding:13px;margin-top:2px;border-radius:14px;background:var(--card-2);font-size:15px;font-weight:540;color:#E03B3B}
-@media (prefers-color-scheme:dark){.linkbtn{color:#FF7A7A}}
+.linkbtn{width:100%;padding:13px;margin-top:2px;border-radius:14px;background:var(--card-2);font-size:15px;font-weight:540;color:var(--danger)}
 
 /* ═══ DOCK / RAIL ══════════════════════════════════════════════ */
 .dock{position:absolute;left:0;right:0;bottom:0;z-index:30;background:var(--glass);backdrop-filter:saturate(180%) blur(22px);-webkit-backdrop-filter:saturate(180%) blur(22px);border-top:1px solid var(--line);padding-bottom:var(--safe-b)}
@@ -252,8 +312,7 @@ button{border:0;background:none;cursor:pointer;padding:0}
 .tabs{display:flex;padding:4px 10px 8px}
 .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;color:var(--ink-3);font-size:10.5px;font-weight:560;transition:color .2s var(--ease)}
 .tab svg{width:23px;height:23px}
-.tab[aria-selected="true"]{color:var(--sun-4)}
-@media (prefers-color-scheme:dark){.tab[aria-selected="true"]{color:var(--sun-1)}}
+.tab[aria-selected="true"]{color:var(--nav-on)}
 .brand{display:none;align-items:center;gap:10px;padding:0 0 22px}
 .brand img{width:34px;height:34px;border-radius:9px}
 .brand b{font-size:16px;font-weight:680;letter-spacing:-.025em}
@@ -285,13 +344,11 @@ button{border:0;background:none;cursor:pointer;padding:0}
 .ac button:hover,.ac button.sel{background:var(--card-2)}
 .ac em{font-style:normal;font-size:15px}
 .ac i{margin-left:auto;font-style:normal;font-size:11.5px;color:var(--ink-3)}
-.ac mark{background:none;color:var(--sun-3);font-weight:660}
-@media (prefers-color-scheme:dark){.ac mark{color:var(--sun-1)}}
+.ac mark{background:none;color:var(--mark);font-weight:660}
 .acts{padding:14px 18px 0;display:flex;flex-direction:column;gap:9px}
 .act{display:flex;align-items:center;gap:12px;width:100%;padding:14px 16px;border-radius:15px;background:var(--card-2);font-size:15.5px;font-weight:520;text-align:left;transition:transform .16s var(--ease)}
 .act:active{transform:scale(.98)}
-.act.warn{color:#E03B3B}
-@media (prefers-color-scheme:dark){.act.warn{color:#FF7A7A}}
+.act.warn{color:var(--danger)}
 .act svg{width:19px;height:19px;flex:none;opacity:.75}
 .primary{width:100%;margin-top:4px;padding:15px;border-radius:15px;background:var(--ramp);color:#fff;font-size:16px;font-weight:600;box-shadow:0 8px 22px -10px var(--sun-3);transition:transform .16s var(--ease)}
 .primary:active{transform:scale(.985)}
@@ -302,10 +359,14 @@ button{border:0;background:none;cursor:pointer;padding:0}
 .confirm.on .cbox{transform:scale(1);opacity:1}
 .cbox h3{margin:0 0 8px;font-size:17.5px;font-weight:660;letter-spacing:-.025em}
 .cbox p{margin:0 0 20px;font-size:14px;line-height:1.5;color:var(--ink-2)}
-.cbox .go{width:100%;padding:14px;border-radius:14px;background:#E03B3B;color:#fff;font-size:16px;font-weight:600}
+.cbox .go{width:100%;padding:14px;border-radius:14px;background:var(--danger-solid);color:#fff;font-size:16px;font-weight:600}
 .cbox .no{width:100%;padding:14px;font-size:16px;font-weight:520;color:var(--ink-2)}
-.toast{position:fixed;left:50%;bottom:calc(102px + var(--safe-b));z-index:120;transform:translate(-50%,16px);opacity:0;pointer-events:none;background:var(--ink);color:var(--canvas);padding:11px 18px;border-radius:999px;font-size:13.5px;font-weight:540;transition:.32s var(--ease);white-space:nowrap;box-shadow:var(--shadow-lg)}
+.toast{position:fixed;left:50%;bottom:calc(102px + var(--safe-b));z-index:120;transform:translate(-50%,16px);opacity:0;pointer-events:none;background:var(--ink);color:var(--canvas);padding:11px 18px;border-radius:999px;font-size:13.5px;font-weight:540;transition:.32s var(--ease);white-space:nowrap;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:14px;max-width:calc(100vw - 32px)}
 .toast.on{opacity:1;transform:translate(-50%,0)}
+.toast.act{pointer-events:auto}
+.toast span{overflow:hidden;text-overflow:ellipsis}
+.toast button{flex:none;font-size:13.5px;font-weight:680;color:var(--toast-act);letter-spacing:-.01em}
+.toast button:active{opacity:.6}
 
 /* ═══ SETTINGS ═════════════════════════════════════════════════ */
 .setgrp{margin:16px;background:var(--card);border-radius:var(--r-lg);box-shadow:var(--shadow);overflow:hidden;break-inside:avoid}
@@ -314,12 +375,37 @@ button{border:0;background:none;cursor:pointer;padding:0}
 .setrow b{font-weight:520}
 .setrow i{margin-left:auto;font-style:normal;font:500 13px/1 var(--mono);color:var(--ink-3);text-align:right}
 .setrow p{margin:4px 0 0;font-size:12.5px;color:var(--ink-3);line-height:1.45}
-.setrow.warn b{color:#E03B3B}
+.setrow.warn b{color:var(--danger)}
 .chk{flex:none;width:22px;height:22px;border-radius:7px;border:1.8px solid var(--ink-3);display:grid;place-items:center;transition:.2s var(--ease)}
 .chk svg{width:12px;height:12px;color:#fff;opacity:0;transform:scale(.4);transition:.2s var(--ease)}
 .setrow.ticked .chk{background:linear-gradient(140deg,var(--sun-3),var(--sun-4));border-color:transparent}
 .setrow.ticked .chk svg{opacity:1;transform:scale(1)}
 .setrow.ticked b{color:var(--ink-3);text-decoration:line-through}
+
+/* ── settings: pickers and switches ── */
+.setseg{display:flex;gap:4px;margin:11px 17px 15px;padding:4px;background:var(--card-2);border:1px solid var(--line);border-radius:14px}
+.setseg button{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;padding:10px 6px;border-radius:10px;font-size:13.5px;font-weight:560;color:var(--ink-2);transition:transform .18s var(--spring),background .22s var(--ease),color .22s var(--ease)}
+.setseg button svg{width:15px;height:15px}
+.setseg button:active{transform:scale(.96)}
+.setseg button[aria-pressed="true"]{background:var(--card);color:var(--ink);box-shadow:var(--shadow)}
+.switch{margin-left:auto;flex:none;width:46px;height:28px;border-radius:999px;background:var(--line);position:relative;transition:background .25s var(--ease)}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .3s var(--spring)}
+.setrow[aria-pressed="true"] .switch{background:linear-gradient(120deg,var(--sun-3),var(--sun-4))}
+.setrow[aria-pressed="true"] .switch::after{transform:translateX(18px)}
+
+/* ── who's bringing it ── */
+.who{flex:none;font:620 10.5px/1 var(--font);letter-spacing:.02em;color:var(--fix-ink);background:var(--fix-bg);padding:5px 7px;border-radius:6px;max-width:84px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── the day you're actually on ── */
+.day{position:relative}
+.day.today::after{content:"";position:absolute;top:5px;right:6px;width:5px;height:5px;border-radius:50%;background:var(--sun-2)}
+.day[aria-pressed="true"].today::after{background:var(--sun-1)}
+
+/* ── sheets you can throw away ── */
+.sheet.drag{transition:none}
+.sheet .grip{touch-action:none;cursor:grab}
+.sheet .shd{touch-action:none}
+.sheet .shd h2{pointer-events:none}
 
 /* ═══ TABLET ≥ 700px ═══════════════════════════════════════════ */
 @media (min-width:700px){
@@ -372,7 +458,13 @@ button{border:0;background:none;cursor:pointer;padding:0}
     <header class="sky">
       <div class="brow">
         <div class="trip"><h1 id="tripName">Our trip</h1><span class="room" id="roomTag"></span></div>
-        <div class="sync" id="syncPill" data-mode="local"><span class="dot"></span><span id="syncTxt">On this device</span></div>
+        <div class="browR">
+          <div class="sync" id="syncPill" data-mode="local"><span class="dot"></span><span id="syncTxt">On this device</span></div>
+          <button class="skybtn" data-theme-toggle aria-label="Switch between day and night">
+          <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M21.4 12h-2.2M4.8 12H2.6M18.6 5.4l-1.6 1.6M7 17l-1.6 1.6M18.6 18.6 17 17M7 7 5.4 5.4"/></svg>
+          <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4 8.4 8.4 0 1 0 20 14.2Z"/></svg>
+        </button>
+        </div>
       </div>
       <div class="cdown" role="timer" aria-live="off"><b class="cdd">—</b><span class="cdu">days</span><em class="cdt">00:00:00</em><span class="cdl">until we leave</span><i class="cdbar"></i></div>
       <svg class="horizon" viewBox="0 0 320 104" fill="none" aria-hidden="true" preserveAspectRatio="xMidYMid meet">
@@ -413,7 +505,11 @@ button{border:0;background:none;cursor:pointer;padding:0}
   <!-- ══════ ITINERARY ══════ -->
   <div class="pane" id="pane-itinerary">
     <header class="sky">
-      <div class="brow"><div class="trip"><h1>Pictured Rocks</h1><span class="room">SEP 4–7 2026</span></div></div>
+      <div class="brow"><div class="trip"><h1>Pictured Rocks</h1><span class="room">SEP 4–7 2026</span></div>
+        <div class="browR"><button class="skybtn" data-theme-toggle aria-label="Switch between day and night">
+          <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M21.4 12h-2.2M4.8 12H2.6M18.6 5.4l-1.6 1.6M7 17l-1.6 1.6M18.6 18.6 17 17M7 7 5.4 5.4"/></svg>
+          <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4 8.4 8.4 0 1 0 20 14.2Z"/></svg>
+        </button></div></div>
       <p class="lede">Everything is Eastern Time once you cross into Michigan. Realistic start each day is 11:00 — mornings are slow at sixteen months.</p>
       <div class="cdown" role="timer" aria-live="off"><b class="cdd">—</b><span class="cdu">days</span><em class="cdt">00:00:00</em><span class="cdl">until we leave</span><i class="cdbar"></i></div>
       <div style="height:16px"></div>
@@ -435,7 +531,11 @@ button{border:0;background:none;cursor:pointer;padding:0}
   <!-- ══════ SHARE ══════ -->
   <div class="pane" id="pane-share">
     <header class="sky">
-      <div class="brow"><div class="trip"><h1>Share &amp; sync</h1></div></div>
+      <div class="brow"><div class="trip"><h1>Share &amp; sync</h1></div>
+        <div class="browR"><button class="skybtn" data-theme-toggle aria-label="Switch between day and night">
+          <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M21.4 12h-2.2M4.8 12H2.6M18.6 5.4l-1.6 1.6M7 17l-1.6 1.6M18.6 18.6 17 17M7 7 5.4 5.4"/></svg>
+          <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4 8.4 8.4 0 1 0 20 14.2Z"/></svg>
+        </button></div></div>
       <p class="lede">Anyone with the link edits the same list. No accounts, no passwords.</p>
       <div style="height:16px"></div>
     </header>
@@ -445,6 +545,18 @@ button{border:0;background:none;cursor:pointer;padding:0}
         <button class="setrow" id="renameBtn"><b>Trip name</b><i id="nameVal"></i></button>
         <button class="setrow" id="copyBtn"><div><b>Copy invite link</b><p>Send it to everyone coming. They open it and they're in.</p></div></button>
         <button class="setrow" id="joinBtn"><div><b>Join a different list</b><p>Enter a room code someone gave you.</p></div></button>
+        <button class="setrow" id="textBtn"><div><b>Copy the list as text</b><p>Plain text with tick boxes, for a message to whoever isn't on the app.</p></div></button>
+      </div>
+      <div class="setgrp">
+        <h3>Look &amp; feel</h3>
+        <div class="setseg" id="themeSeg" role="group" aria-label="Day or night">
+          <button data-set-theme="system" aria-pressed="true">Automatic</button>
+          <button data-set-theme="day" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M21.4 12h-2.2M4.8 12H2.6M18.6 5.4l-1.6 1.6M7 17l-1.6 1.6M18.6 18.6 17 17M7 7 5.4 5.4"/></svg>Day</button>
+          <button data-set-theme="night" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4 8.4 8.4 0 1 0 20 14.2Z"/></svg>Night</button>
+        </div>
+        <button class="setrow" id="hapticRow" aria-pressed="true"><div><b>Buzz when you tick something</b><p>A short tap on the phone as an item goes in the bag.</p></div><span class="switch"></span></button>
       </div>
       <div class="setgrp">
         <h3>Sync</h3>
@@ -473,7 +585,7 @@ button{border:0;background:none;cursor:pointer;padding:0}
 
   <!-- ══════ DOCK ══════ -->
   <div class="dock" id="dock">
-    <div class="brand"><img src="icon-192.png" alt="" width="34" height="34"><div><b>Sunrise</b><i id="brandRoom"></i></div></div>
+    <div class="brand"><img src="icon-192.png" alt="" width="34" height="34"><div><b>Backpacker</b><i id="brandRoom"></i></div></div>
     <nav class="tabs" role="tablist">
       <button class="tab" role="tab" aria-selected="true" data-tab="packing">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14a1 1 0 0 1 1 1v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9a1 1 0 0 1 1-1Z"/><path d="M9 8V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/><path d="M9.5 14.5 11 16l3.5-3.5"/></svg>Packing</button>
@@ -499,7 +611,10 @@ button{border:0;background:none;cursor:pointer;padding:0}
       <div class="fld"><label for="fQty">How many</label><div class="step"><button id="qtyDown" aria-label="Fewer">−</button><em id="qtyVal">1</em><button id="qtyUp" aria-label="More">+</button></div></div>
     </div>
     <div class="fld"><label for="fCat">Category</label><input type="text" id="fCat" placeholder="Pick or invent one" autocomplete="off"><div class="ac" id="acCat"></div></div>
-    <div class="fld"><label for="fNote">Note <span style="text-transform:none;letter-spacing:0;font-weight:500">(optional)</span></label><input type="text" id="fNote" placeholder="Boat bag, buy in Escanaba…" autocomplete="off"></div>
+    <div class="two">
+      <div class="fld" style="flex:1"><label for="fNote">Note <span style="text-transform:none;letter-spacing:0;font-weight:500">(optional)</span></label><input type="text" id="fNote" placeholder="Boat bag, buy in Escanaba…" autocomplete="off"></div>
+      <div class="fld" style="width:112px"><label for="fWho">Who</label><input type="text" id="fWho" placeholder="Anyone" autocomplete="off"><div class="ac" id="acWho"></div></div>
+    </div>
   </div>
   <div class="acts"><button class="primary" id="saveBtn">Add to list</button><p class="hint" id="edHint">Press enter to add and keep going.</p></div>
 </div>
@@ -676,13 +791,69 @@ const norm=s=>String(s).toLowerCase().trim();
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const hp=new URLSearchParams(location.hash.slice(1));
-const ROOM=(hp.get('room')||localStorage.getItem('sunrise:room')||'shared-trip').replace(/[^a-z0-9-]/gi,'').toLowerCase()||'shared-trip';
-localStorage.setItem('sunrise:room',ROOM);
+const ROOM=(hp.get('room')||localStorage.getItem('backpacker:room')||'shared-trip').replace(/[^a-z0-9-]/gi,'').toLowerCase()||'shared-trip';
+localStorage.setItem('backpacker:room',ROOM);
 if(!hp.get('room')) history.replaceState(null,'','#room='+ROOM);
+
+/* ═══ Day & night ══════════════════════════════════════════════
+   Three states. Automatic follows the phone; Day and Night pin it.
+   Everything — sky, cards, map palette, map tiles — reads the one
+   attribute on <html>, so the whole app turns over together.
+   ══════════════════════════════════════════════════════════════ */
+const TKEY='backpacker:theme';
+const sysDark=matchMedia('(prefers-color-scheme:dark)');
+const isDark=()=>document.documentElement.dataset.theme==='dark';
+let themePref=(()=>{try{return localStorage.getItem(TKEY)||'system'}catch(e){return'system'}})();
+let themeT=null;
+function applyTheme(pref,animate){
+ themePref=pref;try{localStorage.setItem(TKEY,pref)}catch(e){}
+ const r=document.documentElement;
+ const dark=pref==='night'||(pref==='system'&&sysDark.matches);
+ const flipped=(r.dataset.theme==='dark')!==dark;
+ r.dataset.themePref=pref;
+ if(animate&&flipped&&!matchMedia('(prefers-reduced-motion:reduce)').matches){
+  r.classList.add('themeshift');clearTimeout(themeT);
+  themeT=setTimeout(()=>r.classList.remove('themeshift'),440);
+ }
+ r.dataset.theme=dark?'dark':'light';
+ r.style.colorScheme=dark?'dark':'light';
+ const m=document.getElementById('tcMeta');if(m)m.setAttribute('content',dark?'#0F0B1A':'#3B1E6E');
+ $$('[data-set-theme]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.setTheme===pref)));
+ if(flipped)afterThemeFlip();
+}
+function afterThemeFlip(){
+ // The map bakes its palette into tiles and polylines, so it gets redrawn.
+ if(S.tab==='itinerary'&&S.itView==='map'&&$('#itBody').innerHTML.trim()){
+  const y=$('#pane-itinerary').scrollTop;paintItin();$('#pane-itinerary').scrollTop=y;
+ }
+}
+sysDark.addEventListener('change',()=>{if(themePref==='system')applyTheme('system',true)});
+
+/* The sky has to fade out below whatever height the header lands at, so
+   each pane measures its own and hands the number to the gradient. */
+function sizeAura(){
+ $$('.pane').forEach(p=>{
+  const sky=p.querySelector('.sky');if(!sky)return;
+  const skyH=sky.offsetHeight;if(!skyH)return;
+  // The sky stays saturated to the bottom of the header, then spends the
+  // height of the frosted bar under it dissolving into the canvas — so the
+  // search row is the join, and nothing below it is a different colour.
+  const bar=p.querySelector('.controls,.itbar');
+  const barH=bar?bar.offsetHeight:64;
+  const total=skyH+barH;
+  p.style.setProperty('--aura',total+'px');
+  p.style.setProperty('--sky-stop',(skyH/total*100).toFixed(2)+'%');
+ });
+}
+
+/* ═══ Haptics ═════════════════════════════════════════════════ */
+const HKEY='backpacker:haptics';
+let haptics=(()=>{try{return localStorage.getItem(HKEY)!=='0'}catch(e){return true}})();
+const buzz=p=>{if(!haptics||!navigator.vibrate)return;try{navigator.vibrate(p)}catch(e){}};
 
 /* ═══ Store ═══════════════════════════════════════════════════ */
 const Store={
- mode:'local',db:null,fb:null,key:'sunrise:'+ROOM,cb:null,chan:null,
+ mode:'local',db:null,fb:null,key:'backpacker:'+ROOM,cb:null,chan:null,
  async init(cb){
   this.cb=cb;
   if(FIREBASE_CONFIG){
@@ -694,7 +865,7 @@ const Store={
     this.mode='live';return;
    }catch(e){console.warn('Live sync unavailable, staying local.',e)}
   }
-  try{this.chan=new BroadcastChannel('sunrise:'+ROOM);this.chan.onmessage=()=>this.read()}catch(e){}
+  try{this.chan=new BroadcastChannel('backpacker:'+ROOM);this.chan.onmessage=()=>this.read()}catch(e){}
   addEventListener('storage',e=>{if(e.key===this.key)this.read()});
   this.read();
  },
@@ -712,7 +883,7 @@ const Store={
 };
 
 const S={items:{},name:TRIP.title,checks:{},q:'',cat:'all',hide:false,
- shut:new Set(JSON.parse(localStorage.getItem('sunrise:shut')||'[]')),day:0,itView:'map',tab:'packing',
+ shut:new Set(JSON.parse(localStorage.getItem('backpacker:shut')||'[]')),day:0,itView:'map',tab:'packing',
  days:null,edit:false,follow:true};
 
 /* The itinerary starts as the plan below and becomes editable data the
@@ -792,7 +963,7 @@ function visible(){
  return Object.entries(S.items).map(([id,it])=>({id,...it})).filter(it=>{
   if(S.hide&&it.packed)return false;
   if(S.cat!=='all'&&it.cat!==S.cat)return false;
-  if(q&&!(norm(it.name).includes(q)||norm(it.cat).includes(q)||norm(it.note||'').includes(q)))return false;
+  if(q&&!(norm(it.name).includes(q)||norm(it.cat).includes(q)||norm(it.note||'').includes(q)||norm(it.who||'').includes(q)))return false;
   return true;
  }).sort((a,b)=>(a.packed-b.packed)||a.name.localeCompare(b.name));
 }
@@ -827,7 +998,7 @@ function paintList(){
    <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
    <div class="rows">${rows.map(it=>`<div class="row${it.packed?' done':''}" data-id="${it.id}">
     <button class="tick" data-tick="${it.id}" aria-pressed="${!!it.packed}" aria-label="Mark ${esc(it.name)} packed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.5 5 5 10-11"/></svg></button>
-    <button class="face" data-edit="${it.id}"><span style="min-width:0"><span class="name">${esc(it.name)}</span>${it.note?`<span class="note">${esc(it.note)}</span>`:''}</span>${it.qty>1?`<span class="qty">×${it.qty}</span>`:''}</button>
+    <button class="face" data-edit="${it.id}"><span style="min-width:0"><span class="name">${esc(it.name)}</span>${it.note?`<span class="note">${esc(it.note)}</span>`:''}</span>${it.who?`<span class="who">${esc(it.who)}</span>`:''}${it.qty>1?`<span class="qty">×${it.qty}</span>`:''}</button>
     <button class="more" data-more="${it.id}" aria-label="Options"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg></button>
    </div>`).join('')}</div></section>`;
  }).join('');
@@ -843,9 +1014,14 @@ function toggle(id){
  const it=S.items[id];if(!it)return;
  const next={...it,packed:!it.packed};S.items[id]=next;
  const row=document.querySelector(`.row[data-id="${id}"]`);
+ let cleared=false;
  if(row){row.classList.toggle('done',next.packed);row.querySelector('.tick').setAttribute('aria-pressed',next.packed);
   const sec=row.closest('.sect'),rows=[...sec.querySelectorAll('.row')],d=rows.filter(r=>r.classList.contains('done')).length;
-  sec.querySelector('.scount').textContent=`${d}/${rows.length}`;sec.querySelector('.bar i').style.width=(d/rows.length*100)+'%'}
+  sec.querySelector('.scount').textContent=`${d}/${rows.length}`;sec.querySelector('.bar i').style.width=(d/rows.length*100)+'%';
+  cleared=next.packed&&d===rows.length}
+ // the buzz lands on the tick itself, and answers differently when a whole
+ // category just closed out
+ buzz(cleared?[8,60,16]:(next.packed?10:5));
  paintHorizon();Store.put(id,next);
  if(S.hide&&next.packed)setTimeout(paintList,300);
 }
@@ -853,9 +1029,23 @@ function seed(){const m={};for(const n of STARTER)m[uid()]={name:n,cat:guessCat(
  Store.putMany(m);toast(STARTER.length+' essentials added')}
 
 /* ═══ Itinerary ═══════════════════════════════════════════════ */
+/* Which day of the trip is it right now? During the four days the app opens
+   on the day you're living, not on Friday. */
+function dayIsToday(d){
+ const n=parseInt(d.date,10);if(!isFinite(n))return false;
+ const start=new Date(DEPART),now=new Date();
+ return now.getFullYear()===start.getFullYear()&&now.getMonth()===start.getMonth()&&now.getDate()===n;
+}
+const todayIndex=()=>DAYS().findIndex(dayIsToday);
+let snapped=false;
+function snapToToday(){if(snapped)return;snapped=true;const i=todayIndex();if(i>=0)S.day=i}
+
 function paintDayTabs(){
  const add=S.edit?`<button class="day" data-act="day-add" style="min-width:52px"><b>+</b><i>DAY</i></button>`:'';
- $('#dayTabs').innerHTML=DAYS().map((d,i)=>`<button class="day" data-day="${i}" aria-pressed="${S.day===i}"><b>${esc(d.label)}</b><i>SEP ${esc(d.date)}</i></button>`).join('')+add;
+ $('#dayTabs').innerHTML=DAYS().map((d,i)=>{
+  const now=dayIsToday(d);
+  return`<button class="day${now?' today':''}" data-day="${i}" aria-pressed="${S.day===i}"${now?' aria-current="date"':''}><b>${esc(d.label)}</b><i>${now?'TODAY':'SEP '+esc(d.date)}</i></button>`;
+ }).join('')+add;
 }
 const stopCards=day=>(day.stops||[]).map((s,i)=>`<div class="stop${s.key?' key':''}${S.edit?' ed':''}" data-i="${i}">
  <div class="gutter"><b>${esc(s.t||'')}</b>${s.z?`<i>${esc(s.z)}</i>`:''}</div>
@@ -908,7 +1098,7 @@ function paintItin(){
    ══════════════════════════════════════════════════════════════ */
 let mapCleanup=null;
 const HAVE_L=typeof L!=='undefined';
-const TILES=matchMedia('(prefers-color-scheme:dark)').matches
+const tilesUrl=()=>isDark()
  ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
  : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
 const FOLLOW_Z=12;
@@ -926,7 +1116,7 @@ function mapShell(day){
    kept in localStorage, so a day you've opened once still draws its real
    roads with no signal. Straight lines show immediately and are replaced
    the moment the route lands; if it never lands, straight lines stay. */
-const roadKey=ll=>'sunrise:road:'+ll.map(p=>p.lat.toFixed(4)+','+p.lng.toFixed(4)).join(';');
+const roadKey=ll=>'backpacker:road:'+ll.map(p=>p.lat.toFixed(4)+','+p.lng.toFixed(4)).join(';');
 async function roadRoute(ll){
  if(ll.length<2)return null;
  const key=roadKey(ll);
@@ -948,13 +1138,13 @@ function initLeaflet(day){
 
  const map=L.map(host,{zoomControl:false,attributionControl:true,scrollWheelZoom:false,
   dragging:true,tap:true,zoomSnap:.25,fadeAnimation:false});
- L.tileLayer(TILES,{maxZoom:19,minZoom:5,crossOrigin:true,
+ L.tileLayer(tilesUrl(),{maxZoom:19,minZoom:5,crossOrigin:true,
   attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'}).addTo(map);
 
  let bounds=L.latLngBounds(ll).pad(.06);
  if(S.follow)map.setView(ll[0],FOLLOW_Z,{animate:false}); else map.fitBounds(bounds,{animate:false});
 
- const dark=matchMedia('(prefers-color-scheme:dark)').matches;
+ const dark=isDark();
  const glow=L.polyline(ll,{color:'#FF6B5A',weight:13,opacity:.20,lineCap:'round',lineJoin:'round'}).addTo(map);
  const casing=L.polyline(ll,{color:dark?'#0E0A18':'#FFFFFF',weight:8,opacity:.55,lineCap:'round',lineJoin:'round'}).addTo(map);
  const ahead=L.polyline(ll,{color:'#FFB86B',weight:5,opacity:.55,dashArray:'1 9',lineCap:'round'}).addTo(map);
@@ -1341,6 +1531,7 @@ function openEditor(id,prefill){
  $('#fName').value=it?it.name:(prefill||'');
  $('#fCat').value=it?it.cat:(prefill?guessCat(prefill):'');
  $('#fNote').value=it?(it.note||''):'';
+ $('#fWho').value=it?(it.who||''):'';
  qty=it?(it.qty||1):1;$('#qtyVal').textContent=qty;
  openSheet($('#editor'));setTimeout(()=>$('#fName').focus(),380);
 }
@@ -1350,7 +1541,7 @@ $('#qtyDown').onclick=()=>{qty=Math.max(1,qty-1);$('#qtyVal').textContent=qty};
 function save(keep){
  const name=$('#fName').value.trim();if(!name)return $('#fName').focus();
  const cat=$('#fCat').value.trim()||guessCat(name)||'Other';
- const item={name,cat,qty,note:$('#fNote').value.trim(),packed:editing?!!S.items[editing].packed:false,ts:editing?S.items[editing].ts:Date.now()};
+ const item={name,cat,qty,note:$('#fNote').value.trim(),who:$('#fWho').value.trim(),packed:editing?!!S.items[editing].packed:false,ts:editing?S.items[editing].ts:Date.now()};
  Store.put(editing||uid(),item);toast(editing?'Saved':`“${name}” added`);
  if(editing||!keep){closeSheets();return}
  $('#fName').value='';$('#fNote').value='';qty=1;$('#qtyVal').textContent=1;$('#fName').focus();
@@ -1358,6 +1549,7 @@ function save(keep){
 $('#saveBtn').onclick=()=>save(false);
 $('#fName').addEventListener('keydown',e=>{if(e.key!=='Enter')return;if(acOpen()&&acIdx>-1)return;e.preventDefault();hideAc();save(true)});
 $('#fNote').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();save(true)}});
+$('#fWho').addEventListener('keydown',e=>{if(e.key==='Enter'&&!(acOpen()&&acIdx>-1)){e.preventDefault();hideAc();save(true)}});
 $('#fName').addEventListener('input',()=>{const g=guessCat($('#fName').value);if(g&&!$('#fCat').value.trim())$('#fCat').value=g});
 
 let acEl=null,acIdx=-1,acRows=[];
@@ -1393,16 +1585,41 @@ wireAc($('#fCat'),$('#acCat'),q=>{
  return CAT_NAMES.concat(custom).filter(c=>norm(c).includes(q))
   .map(c=>({label:c,icon:(CAT[c]||{}).icon||'✨',tail:CAT[c]?`${CAT[c].items.length} known`:'your category'}));
 });
+wireAc($('#fWho'),$('#acWho'),q=>{
+ const names=[...new Set(Object.values(S.items).map(i=>(i.who||'').trim()).filter(Boolean))];
+ return names.filter(n=>norm(n).includes(q)).map(n=>({label:n,icon:'\ud83d\udc64',tail:'already used'}));
+});
 function openActions(id){actionId=id;$('#acTitle').textContent=S.items[id].name;openSheet($('#actions'))}
 $('#aEdit').onclick=()=>{const id=actionId;closeSheets();setTimeout(()=>openEditor(id),260)};
 $('#aDup').onclick=()=>{const it=S.items[actionId];Store.put(uid(),{...it,packed:false,ts:Date.now()});closeSheets();toast('Duplicated')};
 $('#aDel').onclick=()=>{const it=S.items[actionId],id=actionId;closeSheets();
- setTimeout(()=>ask(`Delete “${it.name}”?`,'It disappears for everyone on this list.','Delete',()=>{Store.del(id);toast('Deleted')}),260)};
+ setTimeout(()=>ask(`Delete “${it.name}”?`,'It disappears for everyone on this list.','Delete',()=>{
+  Store.del(id);toast(`“${it.name}” deleted`,()=>{Store.put(id,it);toast('Back on the list')})}),260)};
 function ask(t,b,g,fn){$('#cTitle').textContent=t;$('#cBody').textContent=b;$('#cGo').textContent=g;confirmFn=fn;$('#confirm').classList.add('on')}
 $('#cNo').onclick=()=>$('#confirm').classList.remove('on');
 $('#confirm').onclick=e=>{if(e.target===$('#confirm'))$('#confirm').classList.remove('on')};
 $('#cGo').onclick=()=>{$('#confirm').classList.remove('on');confirmFn&&confirmFn()};
-let tt;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),2100)}
+/* A toast can carry one way back. Nothing destructive in the app is
+   final until this has faded. */
+let tt;
+function toast(m,undo){
+ const t=$('#toast');t.innerHTML='';
+ const label=document.createElement('span');label.textContent=m;t.appendChild(label);
+ t.classList.toggle('act',!!undo);
+ if(undo){
+  const b=document.createElement('button');b.textContent='Undo';
+  b.onclick=()=>{t.classList.remove('on','act');clearTimeout(tt);undo()};
+  t.appendChild(b);
+ }
+ t.classList.add('on');clearTimeout(tt);
+ tt=setTimeout(()=>t.classList.remove('on','act'),undo?5400:2100);
+}
+/* Snapshot of the itinerary as it stands, and the way to put it back. */
+const daySnap=()=>S.days?JSON.parse(JSON.stringify(S.days)):null;
+const restoreDays=snap=>()=>{
+ if(snap){saveDays(snap)}else{Store.clearDays();S.days=null;paintDayTabs();paintItin()}
+ toast('Put back');
+};
 
 /* ═══ Wiring ══════════════════════════════════════════════════ */
 $('#list').addEventListener('click',e=>{
@@ -1411,7 +1628,7 @@ $('#list').addEventListener('click',e=>{
  const m=e.target.closest('[data-more]');if(m)return openActions(m.dataset.more);
  const f=e.target.closest('[data-fold]');
  if(f){const c=f.dataset.fold;S.shut.has(c)?S.shut.delete(c):S.shut.add(c);
-  localStorage.setItem('sunrise:shut',JSON.stringify([...S.shut]));f.closest('.sect').classList.toggle('shut')}
+  localStorage.setItem('backpacker:shut',JSON.stringify([...S.shut]));f.closest('.sect').classList.toggle('shut')}
 });
 $('#chips').addEventListener('click',e=>{const c=e.target.closest('.chip');if(!c)return;S.cat=c.dataset.cat;paintChips();paintList()});
 $('#q').addEventListener('input',e=>{S.q=e.target.value;$('#searchBox').classList.toggle('has',!!S.q);paintList()});
@@ -1464,7 +1681,7 @@ $('#sSave').onclick=()=>{
 $('#sDel').onclick=()=>{const i=stopIx;if(i===null)return;
  const name=DAYS()[S.day].stops[i].n||'this stop';closeSheets();
  ask('Delete this stop?',name+' disappears from the day for everyone.','Delete stop',()=>{
-  const d=cloneDays();d[S.day].stops.splice(i,1);saveDays(d);toast('Stop deleted')})};
+  const prev=daySnap(),d=cloneDays();d[S.day].stops.splice(i,1);saveDays(d);toast('Stop deleted',restoreDays(prev))})};
 
 function openDay(){
  const d=DAYS()[S.day];
@@ -1484,7 +1701,7 @@ $('#dySave').onclick=()=>{
 };
 $('#dyDel').onclick=()=>{closeSheets();
  ask('Delete this day?','Every stop and note on it goes with it.','Delete day',()=>{
-  const d=cloneDays();d.splice(S.day,1);S.day=Math.max(0,S.day-1);saveDays(d);toast('Day deleted')})};
+  const prev=daySnap(),d=cloneDays();d.splice(S.day,1);S.day=Math.max(0,S.day-1);saveDays(d);toast('Day deleted',restoreDays(prev))})};
 
 function openNote(i){
  const n=i===null?{e:'\ud83d\udccc',b:'',s:''}:(DAYS()[S.day].notes||[])[i];if(!n)return;
@@ -1504,7 +1721,7 @@ $('#ntSave').onclick=()=>{
 };
 $('#ntDel').onclick=()=>{const i=noteIx;if(i===null)return;closeSheets();
  ask('Delete this note?','It goes for everyone on the list.','Delete note',()=>{
-  const d=cloneDays();d[S.day].notes.splice(i,1);saveDays(d);toast('Note deleted')})};
+  const prev=daySnap(),d=cloneDays();d[S.day].notes.splice(i,1);saveDays(d);toast('Note deleted',restoreDays(prev))})};
 
 $('#itBody').addEventListener('click',e=>{
  const b=e.target.closest('[data-act]');if(!b)return;
@@ -1518,9 +1735,9 @@ $('#itBody').addEventListener('click',e=>{
  if(act==='stop-down'&&i<day.stops.length-1){const t=day.stops[i+1];day.stops[i+1]=day.stops[i];day.stops[i]=t;return saveDays(d)}
  if(act==='stop-del'){const name=day.stops[i].n||'this stop';
   return ask('Delete this stop?',name+' disappears from the day for everyone.','Delete stop',()=>{
-   const c=cloneDays();c[S.day].stops.splice(i,1);saveDays(c);toast('Stop deleted')})}
+   const prev=daySnap(),c=cloneDays();c[S.day].stops.splice(i,1);saveDays(c);toast('Stop deleted',restoreDays(prev))})}
  if(act==='note-del'){return ask('Delete this note?','It goes for everyone on the list.','Delete note',()=>{
-   const c=cloneDays();c[S.day].notes.splice(i,1);saveDays(c);toast('Note deleted')})}
+   const prev=daySnap(),c=cloneDays();c[S.day].notes.splice(i,1);saveDays(c);toast('Note deleted',restoreDays(prev))})}
  if(act==='stop-add'){
   const prev=day.stops[day.stops.length-1]||{};
   day.stops.push({t:'',z:prev.z||'',n:'New stop',e:'\ud83d\udccd',d:'',...(prev.ll?{ll:prev.ll}:{})});
@@ -1534,8 +1751,9 @@ function goTab(name){
  $$('.tab').forEach(x=>x.setAttribute('aria-selected',x.dataset.tab===name));
  $$('.pane').forEach(p=>p.classList.toggle('on',p.id==='pane-'+name));
  $('#app').classList.toggle('pane-packing-on',name==='packing');
- if(name==='itinerary'&&!$('#itBody').innerHTML.trim()){paintDayTabs();paintItin()}
+ if(name==='itinerary'&&!$('#itBody').innerHTML.trim()){snapToToday();paintDayTabs();paintItin()}
  if(name==='packing'){pathLen=0;placeSun(curT)}
+ sizeAura();
 }
 $$('.tab').forEach(b=>b.onclick=()=>goTab(b.dataset.tab));
 $('#app').classList.add('pane-packing-on');
@@ -1545,9 +1763,110 @@ $('#copyBtn').onclick=async()=>{
  try{await navigator.clipboard.writeText(url);toast('Invite link copied')}catch(e){prompt('Copy this link:',url)}};
 $('#renameBtn').onclick=()=>{const n=prompt('Name this trip',S.name);if(n&&n.trim())Store.rename(n.trim())};
 $('#joinBtn').onclick=()=>{const r=prompt('Room code to join',ROOM);if(r&&r.trim()){location.hash='room='+r.trim().replace(/[^a-z0-9-]/gi,'').toLowerCase();location.reload()}};
-$('#wipeBtn').onclick=()=>ask('Delete every item?','The whole packing list is cleared for everyone. This cannot be undone.','Delete everything',()=>{Store.wipe();toast('List cleared')});
+$('#wipeBtn').onclick=()=>ask('Delete every item?','The whole packing list is cleared for everyone. Undo is offered for a few seconds afterwards.','Delete everything',()=>{
+ const snap=JSON.parse(JSON.stringify(S.items));Store.wipe();
+ toast('List cleared',()=>{Store.putMany(snap);toast('List restored')})});
 $('#resetItinBtn').onclick=()=>ask('Reset the itinerary?','Every edit anyone has made is thrown away and the original four-day plan comes back.','Reset itinerary',()=>{
- Store.clearDays();S.days=null;S.day=0;paintDayTabs();paintItin();toast('Itinerary reset')});
+ const prev=daySnap();Store.clearDays();S.days=null;S.day=0;paintDayTabs();paintItin();
+ toast('Itinerary reset',restoreDays(prev))});
+
+/* ═══ Day & night controls ════════════════════════════════════ */
+$$('[data-theme-toggle]').forEach(b=>b.onclick=()=>{
+ const next=isDark()?'day':'night';
+ applyTheme(next,true);buzz(6);
+ toast(next==='night'?'Night':'Day');
+});
+$('#themeSeg').addEventListener('click',e=>{
+ const b=e.target.closest('[data-set-theme]');if(!b)return;
+ applyTheme(b.dataset.setTheme,true);buzz(6);
+});
+$('#hapticRow').onclick=e=>{
+ haptics=!haptics;try{localStorage.setItem(HKEY,haptics?'1':'0')}catch(_){}
+ e.currentTarget.setAttribute('aria-pressed',String(haptics));
+ if(haptics)buzz(12);
+};
+$('#hapticRow').setAttribute('aria-pressed',String(haptics));
+if(!navigator.vibrate)$('#hapticRow').style.display='none';
+
+/* ═══ The list as plain text ══════════════════════════════════ */
+function listAsText(){
+ const items=Object.values(S.items),done=items.filter(i=>i.packed).length;
+ const g={};for(const it of items)(g[it.cat]=g[it.cat]||[]).push(it);
+ const order=CAT_NAMES.filter(k=>g[k]).concat(Object.keys(g).filter(k=>!CAT_NAMES.includes(k)));
+ let out=`${S.name} — packing list\n${done} of ${items.length} packed\n`;
+ for(const k of order){
+  out+=`\n${(CAT[k]||{}).icon||'✨'} ${k}\n`;
+  for(const it of g[k].slice().sort((a,b)=>a.name.localeCompare(b.name)))
+   out+=`${it.packed?'☑':'☐'} ${it.name}${it.qty>1?' ×'+it.qty:''}${it.who?' — '+it.who:''}${it.note?' ('+it.note+')':''}\n`;
+ }
+ return out.trim();
+}
+$('#textBtn').onclick=async()=>{
+ if(!Object.keys(S.items).length)return toast('Nothing on the list yet');
+ const text=listAsText();
+ if(navigator.share&&matchMedia('(max-width:699px)').matches){
+  try{await navigator.share({title:S.name,text});return}catch(e){if(e&&e.name==='AbortError')return}
+ }
+ try{await navigator.clipboard.writeText(text);toast('List copied as text')}
+ catch(e){prompt('Copy the list:',text)}
+};
+
+/* ═══ Signal ══════════════════════════════════════════════════ */
+function refreshNet(){
+ const pill=$('#syncPill');if(!pill)return;
+ if(!navigator.onLine){pill.dataset.mode='off';$('#syncTxt').textContent='Offline · saved here';return}
+ const live=Store.mode==='live';
+ pill.dataset.mode=live?'live':'local';
+ $('#syncTxt').textContent=live?'Live · everyone':'On this device';
+}
+addEventListener('online',()=>{refreshNet();toast('Back online')});
+addEventListener('offline',()=>{refreshNet();toast('Offline — edits are kept here')});
+
+/* Desktop: / jumps to the search box, the way it does everywhere else. */
+addEventListener('keydown',e=>{
+ if(e.key!=='/'||e.metaKey||e.ctrlKey)return;
+ const t=document.activeElement;
+ if(t&&/^(INPUT|TEXTAREA)$/.test(t.tagName))return;
+ e.preventDefault();goTab('packing');$('#q').focus();
+});
+
+/* ═══ Sheets follow the finger ════════════════════════════════
+   Drag the grip or the title bar and the sheet tracks 1:1, resists
+   upward, and can be thrown shut — the landing point is projected from
+   the release velocity, so a flick goes where it looks like it's going.
+   ══════════════════════════════════════════════════════════════ */
+const projectY=(v,d=0.998)=>(v/1000)*d/(1-d);
+function dragSheet(sheet){
+ const handles=[sheet.querySelector('.grip'),sheet.querySelector('.shd')].filter(Boolean);
+ handles.forEach(h=>h.addEventListener('pointerdown',e=>{
+  if(e.target.closest('button'))return;
+  if(!matchMedia('(max-width:699px)').matches)return;
+  if(matchMedia('(prefers-reduced-motion:reduce)').matches)return;
+  const y0=e.clientY,H=()=>sheet.offsetHeight||420;
+  let last=e.clientY,lt=e.timeStamp,v=0,dy=0,live=false;
+  const rubber=o=>{const d=H(),c=.55;return(o*d*c)/(d+c*Math.abs(o))};
+  const move=ev=>{
+   dy=ev.clientY-y0;
+   if(!live){if(Math.abs(dy)<8)return;live=true;sheet.classList.add('drag')}
+   const dt=ev.timeStamp-lt;
+   if(dt>0){v=(ev.clientY-last)/dt*1000;last=ev.clientY;lt=ev.timeStamp}
+   const off=dy>0?dy:rubber(dy);
+   sheet.style.transform=`translateY(${off.toFixed(1)}px)`;
+   scrim.style.opacity=String(clamp(1-Math.max(0,off)/H()*1.15,0,1));
+  };
+  const end=()=>{
+   removeEventListener('pointermove',move);
+   removeEventListener('pointerup',end);removeEventListener('pointercancel',end);
+   if(!live)return;
+   sheet.classList.remove('drag');
+   sheet.style.transform='';scrim.style.opacity='';
+   if(dy+projectY(v)>H()*0.32||v>760)closeSheets();
+  };
+  addEventListener('pointermove',move,{passive:true});
+  addEventListener('pointerup',end);addEventListener('pointercancel',end);
+ }));
+}
+['#editor','#actions','#stopSheet','#daySheet','#noteSheet'].forEach(id=>dragSheet($(id)));
 
 /* ═══ PWA + notifications ═════════════════════════════════════ */
 let swReg=null,swErr='';
@@ -1595,7 +1914,7 @@ $('#diagBtn').onclick=async()=>{
  out.push(ok(standalone()||!!installEvt)+(standalone()?'Already installed':'Prompt available'));
  $('#diagBody').textContent=out.join('  \u00b7  ');
 };
-const NKEY='sunrise:lastNotify',GAP=5*60*60*1000;
+const NKEY='backpacker:lastNotify',GAP=5*60*60*1000;
 function refreshNotifyRow(){
  const p=('Notification'in window)?Notification.permission:'unsupported';
  const t=$('#notifyTitle'),b=$('#notifyBody');
@@ -1616,8 +1935,8 @@ function notifyChanges(n){
  if(Date.now()-last<GAP)return;
  localStorage.setItem(NKEY,Date.now());
  const body=`${n} ${n===1?'change':'changes'} to ${S.name} since you last looked.`;
- if(swReg&&swReg.active)swReg.active.postMessage({type:'notify',title:'Sunrise',body,url:location.href});
- else try{new Notification('Sunrise',{body,icon:'icon-192.png',tag:'sunrise-changes'})}catch(e){}
+ if(swReg&&swReg.active)swReg.active.postMessage({type:'notify',title:'Backpacker',body,url:location.href});
+ else try{new Notification('Backpacker',{body,icon:'icon-192.png',tag:'backpacker-changes'})}catch(e){}
 }
 
 /* ═══ Countdown ═══════════════════════════════════════
@@ -1673,17 +1992,21 @@ Store.init((items,name,checks,days)=>{
   const y=$('#pane-itinerary').scrollTop;paintDayTabs();paintItin();$('#pane-itinerary').scrollTop=y}
 }).then(()=>{
  const live=Store.mode==='live';
- $('#syncPill').dataset.mode=live?'live':'local';
- $('#syncTxt').textContent=live?'Live · everyone':'On this device';
+ refreshNet();
  $('#modeTitle').textContent=live?'Live sync is on':'Saved on this device';
  $('#modeBody').textContent=live
   ?`Every edit lands on everyone's phone in about a second. Room code: ${ROOM}`
   :'This list lives in this browser and syncs between its tabs. To sync across phones, paste a Firebase config into the block at the top of index.html.';
- refreshNotifyRow();refreshInstallRow();
+ refreshNotifyRow();refreshInstallRow();sizeAura();
 });
+applyTheme(themePref,false);
+snapToToday();
+requestAnimationFrame(sizeAura);
+addEventListener('load',sizeAura);
 addEventListener('visibilitychange',()=>{if(!document.hidden)pending=0});
 addEventListener('hashchange',()=>location.reload());
-addEventListener('resize',()=>{pathLen=0;placeSun(curT);if(S.tab==='itinerary')document.documentElement.style.setProperty('--itbarH',$('#itBar').offsetHeight+'px')});
+addEventListener('resize',()=>{pathLen=0;placeSun(curT);sizeAura();
+ if(S.tab==='itinerary')document.documentElement.style.setProperty('--itbarH',$('#itBar').offsetHeight+'px')});
 if(hp.get('tab'))goTab(hp.get('tab'));
 if(hp.get('add'))setTimeout(()=>openEditor(null),500);
 </script>
