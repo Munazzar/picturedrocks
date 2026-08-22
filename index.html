@@ -911,7 +911,7 @@ const HAVE_L=typeof L!=='undefined';
 const TILES=matchMedia('(prefers-color-scheme:dark)').matches
  ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
  : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-const FOLLOW_Z=10;
+const FOLLOW_Z=12;
 
 function mapShell(day){
  if(!HAVE_L)return mapSVG(day);
@@ -932,7 +932,7 @@ function initLeaflet(day){
  L.tileLayer(TILES,{maxZoom:19,minZoom:5,crossOrigin:true,
   attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'}).addTo(map);
 
- const bounds=L.latLngBounds(ll).pad(.18);
+ const bounds=L.latLngBounds(ll).pad(.06);
  if(S.follow)map.setView(ll[0],FOLLOW_Z,{animate:false}); else map.fitBounds(bounds,{animate:false});
 
  const dark=matchMedia('(prefers-color-scheme:dark)').matches;
