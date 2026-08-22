@@ -34,9 +34,14 @@
 /* ═══ TOKENS ═══════════════════════════════════════════════════
    One sunset ramp — amber, coral, magenta, violet, night —
    sampled for every accent so nothing drifts off-palette.
-   ══════════════════════════════════════════════════════════════ */
+   ══════════════════════════════════════════════════════════════ 
+       --sun-2: #FF6B5A;
+    --sun-3: #E0417F;
+    --sun-4: #7B3FE4;
+    --sun-5: #3B1E6E;
+   */
 :root{
-  --sun-1:#FFB86B; --sun-2:#FF6B5A; --sun-3:#E0417F; --sun-4:#7B3FE4; --sun-5:#3B1E6E;
+  --sun-1:#FFB86B; --sun-2:#FF6B5A; --sun-3:#E0417F; --sun-4:#7B3FE4; --sun-5:#7B3FE4;
   --canvas:#FFF8F5; --card:#FFFFFF; --card-2:#FDF6F8;
   --ink:#241733; --ink-2:#6E5D80; --ink-3:#9C8DAC;
   --line:rgba(36,23,51,.09); --line-2:rgba(36,23,51,.05);
@@ -46,7 +51,7 @@
   --ramp:linear-gradient(90deg,var(--sun-1),var(--sun-2) 34%,var(--sun-3) 66%,var(--sun-4));
   /* one sky, poured down the page: night at the status bar, coral at the
      horizon, dissolving into the canvas the cards sit on */
-  --sky-a:#3B1E6E; --sky-b:#7B3FE4; --sky-c:#E0417F; --sky-d:#FF7E63;
+  --sky-a:#FF6B5A; --sky-b:#E0417F; --sky-c:#7B3FE4; --sky-d:#7B3FE4;
   --sky-warm:rgba(255,184,107,.42);
   --sky-stop:80%;
   --sky-grad:radial-gradient(120% 62% at 84% -6%,var(--sky-warm),transparent 62%),
@@ -212,7 +217,7 @@ button{border:0;background:none;cursor:pointer;padding:0}
 .seg{display:flex;gap:3px;padding:3px;background:var(--card-2);border-radius:12px;border:1px solid var(--line)}
 .seg button{flex:1;padding:8px 14px;border-radius:9px;font-size:13.5px;font-weight:560;color:var(--ink-2);transition:.22s var(--ease)}
 .seg button[aria-pressed="true"]{background:var(--card);color:var(--ink);box-shadow:var(--shadow)}
-.itbar{position:sticky;top:0;z-index:20;background:linear-gradient(180deg,var(--glass-0),var(--glass-2) 38%,var(--glass) 78%);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);padding:10px 16px}
+.itbar{position:sticky;top:0;z-index:20;background:linear-gradient(180deg,var(--glass-0),var(--glass-2) 38%,var(--glass) 78%);-webkit-backdrop-filter:saturate(180%) blur(20px);padding:10px 16px}
 .itbar .seg{margin-bottom:9px}
 .days{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none}
 .days::-webkit-scrollbar{display:none}
@@ -424,10 +429,13 @@ button{border:0;background:none;cursor:pointer;padding:0}
   .sheet{border-radius:var(--r-xl);bottom:auto;top:50%;transform:translateY(-42%) scale(.96);opacity:0;pointer-events:none;padding-bottom:16px}
   .sheet.on{transform:translateY(-50%) scale(1);opacity:1;pointer-events:auto}
 }
+@media (min-width:1024px){
+ .app{max-width:100%}
+}
 
 /* ═══ DESKTOP ≥ 1024px — the dock becomes a left rail ══════════ */
-@media (min-width:1024px){
-  .app{max-width:1240px;flex-direction:row}
+@media (min-width:1025px){
+  .app{max-width:100%;flex-direction:row}
   .dock{position:relative;order:-1;flex:none;width:236px;border-top:0;border-right:1px solid var(--line);background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;padding:calc(var(--safe-t) + 26px) 18px 26px;display:flex;flex-direction:column}
   .brand{display:flex}
   .tabs{flex-direction:column;padding:0;gap:3px;order:2}
@@ -446,7 +454,7 @@ button{border:0;background:none;cursor:pointer;padding:0}
   .itgrid .dayhead{padding-left:10px;padding-right:26px}
   .itgrid .alerts{padding-left:10px;padding-right:26px}
 }
-@media (min-width:1440px){ .app{max-width:1400px} .list{column-count:3} }
+@media (min-width:1440px){ .app{max-width:100%} .list{column-count:3} }
 </style>
 </head>
 <body>
