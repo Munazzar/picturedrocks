@@ -922,6 +922,25 @@ function mapShell(day){
   <div class="mapnow" id="mapNow"><b>${esc(stops[0].n||'')}</b><i>${esc(stops[0].t||'')}</i></div></div>`;
 }
 
+/* Road geometry from OSRM's public router — no key, and the answer is
+   kept in localStorage, so a day you've opened once still draws its real
+   roads with no signal. Straight lines show immediately and are replaced
+   the moment the route lands; if it never lands, straight lines stay. */
+const roadKey=ll=>'sunrise:road:'+ll.map(p=>p.lat.toFixed(4)+','+p.lng.toFixed(4)).join(';');
+async function roadRoute(ll){
+ if(ll.length<2)return null;
+ const key=roadKey(ll);
+ try{const c=localStorage.getItem(key);if(c)return JSON.parse(c)}catch(e){}
+ const coords=ll.map(p=>p.lng.toFixed(5)+','+p.lat.toFixed(5)).join(';');
+ const r=await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=simplified&geometries=geojson`,
+  AbortSignal.timeout?{signal:AbortSignal.timeout(12000)}:{});
+ const j=await r.json();
+ if(j.code!=='Ok'||!j.routes||!j.routes[0])throw new Error(j.code||'no route');
+ const pts=j.routes[0].geometry.coordinates.map(c=>[+c[1].toFixed(5),+c[0].toFixed(5)]);
+ try{localStorage.setItem(key,JSON.stringify(pts))}catch(e){}
+ return pts;
+}
+
 function initLeaflet(day){
  const host=document.getElementById('lmap');if(!host)return;
  const stops=stopsWithLL(day);if(!stops.length)return;
@@ -932,13 +951,13 @@ function initLeaflet(day){
  L.tileLayer(TILES,{maxZoom:19,minZoom:5,crossOrigin:true,
   attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'}).addTo(map);
 
- const bounds=L.latLngBounds(ll).pad(.06);
+ let bounds=L.latLngBounds(ll).pad(.06);
  if(S.follow)map.setView(ll[0],FOLLOW_Z,{animate:false}); else map.fitBounds(bounds,{animate:false});
 
  const dark=matchMedia('(prefers-color-scheme:dark)').matches;
- L.polyline(ll,{color:'#FF6B5A',weight:13,opacity:.20,lineCap:'round',lineJoin:'round'}).addTo(map);
- L.polyline(ll,{color:dark?'#0E0A18':'#FFFFFF',weight:8,opacity:.55,lineCap:'round',lineJoin:'round'}).addTo(map);
- L.polyline(ll,{color:'#FFB86B',weight:5,opacity:.55,dashArray:'1 9',lineCap:'round'}).addTo(map);
+ const glow=L.polyline(ll,{color:'#FF6B5A',weight:13,opacity:.20,lineCap:'round',lineJoin:'round'}).addTo(map);
+ const casing=L.polyline(ll,{color:dark?'#0E0A18':'#FFFFFF',weight:8,opacity:.55,lineCap:'round',lineJoin:'round'}).addTo(map);
+ const ahead=L.polyline(ll,{color:'#FFB86B',weight:5,opacity:.55,dashArray:'1 9',lineCap:'round'}).addTo(map);
  const done=L.polyline([ll[0]],{color:'#E0417F',weight:5.2,lineCap:'round',lineJoin:'round'}).addTo(map);
 
  const marks=stops.map((s,i)=>L.marker(ll[i],{interactive:false,keyboard:false,zIndexOffset:-100,
@@ -954,30 +973,48 @@ function initLeaflet(day){
     ${CAR.replace(/url\(#carSheen\)/g,'url(#carSheen2)').replace(/url\(#soft\)/g,'url(#soft2)')}</svg>`})}).addTo(map);
  const carSvg=car.getElement()&&car.getElement().querySelector('svg');
 
- // cumulative metres, so the car moves at a constant speed along the day
- const seg=[],cum=[0];let total=0;
- for(let i=0;i<ll.length-1;i++){const m=map.distance(ll[i],ll[i+1]);seg.push(m);total+=m;cum.push(total)}
+ /* path is whatever we're driving along — straight hops now, real roads
+    once OSRM answers. cum is metres along it; anchors is where each stop
+    falls on it. */
+ let path=[],cum=[],total=0,anchors=[];
+ function rebuild(pts){
+  path=pts.map(p=>Array.isArray(p)?L.latLng(p[0],p[1]):L.latLng(p.lat,p.lng));
+  cum=[0];total=0;
+  for(let i=0;i<path.length-1;i++){total+=map.distance(path[i],path[i+1]);cum.push(total)}
+  anchors=ll.map((q,qi)=>{
+   let best=0,bd=Infinity;
+   for(let i=0;i<path.length;i++){
+    const dy=path[i].lat-q.lat,dx=(path[i].lng-q.lng)*0.7,dd=dy*dy+dx*dx;
+    if(dd<bd){bd=dd;best=i}}
+   return cum[best];
+  });
+  for(let i=1;i<anchors.length;i++)if(anchors[i]<anchors[i-1])anchors[i]=anchors[i-1];
+  anchors[anchors.length-1]=total;
+  glow.setLatLngs(path);casing.setLatLngs(path);ahead.setLatLngs(path);
+  bounds=L.latLngBounds(path).pad(.06);
+ }
+ rebuild(ll);
 
  function at(dist){
   dist=clamp(dist,0,total);
-  let i=0;while(i<seg.length-1&&cum[i+1]<dist)i++;
-  const t=seg[i]?(dist-cum[i])/seg[i]:0,a=ll[i],b=ll[i+1]||ll[i];
+  let i=0;while(i<path.length-2&&cum[i+1]<dist)i++;
+  const span=cum[i+1]-cum[i],t=span?(dist-cum[i])/span:0;
+  const a=path[i],b=path[i+1]||path[i];
   return{p:L.latLng(a.lat+(b.lat-a.lat)*t,a.lng+(b.lng-a.lng)*t),a,b,i};
  }
- let aim=0,cur=0,raf=null,ang=0,held=false,intro=null;
+ let aim=0,cur=0,raf=null,ang=0,held=false,intro=null,dead=false;
  map.on('dragstart',()=>{held=true});
 
  function draw(dist){
-  const{p,a,b}=at(dist);
+  const{p,a,b,i}=at(dist);
   const pa=map.latLngToLayerPoint(a),pb=map.latLngToLayerPoint(b);
   if(Math.hypot(pb.x-pa.x,pb.y-pa.y)>1){
    const target=Math.atan2(pb.y-pa.y,pb.x-pa.x)*180/Math.PI;
-   let dA=((target-ang+540)%360)-180;ang+=dA*0.34;
+   ang+=(((target-ang+540)%360)-180)*0.34;
   }
   car.setLatLng(p);
   if(carSvg)carSvg.style.transform=`rotate(${ang.toFixed(1)}deg)`;
-  const upto=[];for(let k=0;k<ll.length;k++){if(cum[k]<=dist)upto.push(ll[k])}
-  upto.push(p);done.setLatLngs(upto);
+  done.setLatLngs(path.slice(0,i+1).concat([p]));
   if(S.follow&&!held)map.setView(p,map.getZoom(),{animate:false});
  }
  function tick(){const d=aim-cur;
@@ -994,7 +1031,7 @@ function initLeaflet(day){
    if(r.top<=focus){idx=i;const nx=cards[i+1];
     if(nx){const span=nx.getBoundingClientRect().top-r.top;frac=span>0?clamp((focus-r.top)/span,0,1):0}else frac=0}
   }
-  aim=cum[idx]+(cum[idx+1]!==undefined?(cum[idx+1]-cum[idx])*frac:0);
+  aim=anchors[idx]+(anchors[idx+1]!==undefined?(anchors[idx+1]-anchors[idx])*frac:0);
   if(intro)return;
   if(!raf)raf=requestAnimationFrame(tick);
   cards.forEach((c,i)=>c.classList.toggle('here',i===idx));
@@ -1006,11 +1043,17 @@ function initLeaflet(day){
  setTimeout(()=>map.invalidateSize(),60);
  draw(0);onScroll();
 
- // one lap of the day on arrival, so the map is moving when you open it
+ // swap straight hops for real roads as soon as the router answers
+ roadRoute(ll).then(pts=>{
+  if(dead||!pts||pts.length<2)return;
+  const frac=total?cur/total:0;
+  rebuild(pts);
+  cur=frac*total;onScroll();draw(cur);
+  if(!S.follow&&!held)map.fitBounds(bounds,{animate:true});
+ }).catch(()=>{});
+
  if(total&&!matchMedia('(prefers-reduced-motion:reduce)').matches){
   const t0=performance.now(),dur=2600,wasFollowing=S.follow;
-  // The lap is flown from the whole-day view: chasing it at street zoom
-  // would drag half of Wisconsin's tiles down for two seconds of animation.
   if(wasFollowing){held=true;map.fitBounds(bounds,{animate:false})}
   const land=()=>{intro=null;
    if(wasFollowing){held=false;map.setView(at(cur).p,FOLLOW_Z,{animate:true})}
@@ -1032,11 +1075,10 @@ function initLeaflet(day){
   if(S.follow){map.setView(at(cur).p,FOLLOW_Z,{animate:true})}else{map.fitBounds(bounds,{animate:true})}
  };
 
- mapCleanup=()=>{pane.removeEventListener('scroll',onScroll);
+ mapCleanup=()=>{dead=true;pane.removeEventListener('scroll',onScroll);
   if(raf)cancelAnimationFrame(raf);if(intro)cancelAnimationFrame(intro);intro=null;
   try{map.remove()}catch(e){}};
 }
-
 /* ══ Drawn map — the offline fallback ══════════════════════════
    Drawn from real coordinates: Lake Superior's south shore, Lake
    Michigan with Green Bay and the Door Peninsula, Grand Island,
