@@ -15,6 +15,8 @@
 <link rel="icon" href="favicon-32.png" sizes="32x32">
 <link rel="icon" href="icon-192.png" sizes="192x192">
 <title>Sunrise — Pictured Rocks</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <style>
 /* ═══ TOKENS ═══════════════════════════════════════════════════
    One sunset ramp — amber, coral, magenta, violet, night —
@@ -197,6 +199,18 @@ button{border:0;background:none;cursor:pointer;padding:0}
 .mapzoom{position:absolute;left:11px;top:11px;padding:8px 12px;border-radius:12px;background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line-2);box-shadow:var(--shadow);font:560 12px/1 var(--font);color:var(--ink)}
 .mapzoom:active{transform:scale(.96)}
 .mapnone{padding:40px 20px;text-align:center;font-size:13.5px;color:var(--ink-3);line-height:1.5}
+.leaf{height:250px;background:var(--map-land)}
+.leaf.leaflet-container{font:inherit;background:var(--map-land)}
+.leaflet-control-attribution{font-size:9.5px!important;background:var(--glass)!important;color:var(--ink-3)!important;padding:1px 6px!important}
+.leaflet-control-attribution a{color:var(--ink-2)!important}
+.carmark svg{display:block;overflow:visible;transition:none;will-change:transform}
+.stopmark{display:grid;place-items:center}
+.stopmark i{display:block;width:13px;height:13px;border-radius:50%;background:var(--card);border:3px solid #7B3FE4;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.stopmark.key i{border-color:#FF6B5A}
+.stopmark b{position:absolute;left:17px;top:-1px;font:620 11px/1.3 var(--font);color:var(--ink);white-space:nowrap;
+ background:var(--glass);padding:2px 6px;border-radius:7px;box-shadow:var(--shadow);border:1px solid var(--line-2)}
+@media (min-width:700px){.leaf{height:300px}}
+@media (min-width:1024px){.leaf{height:440px}}
 
 /* ── itinerary editing ── */
 .barrow{display:flex;gap:8px;align-items:stretch;margin-bottom:9px}
@@ -866,14 +880,157 @@ function paintItin(){
  if(S.itView==='list'){
   body.innerHTML=banner+head+`<div class="tl" id="tlScroll">${stopCards(d)}${addStop}</div>`+(notes?`<div class="alerts">${notes}</div>`:'')+alerts;
  }else{
-  body.innerHTML=`<div class="itgrid"><div class="mapwrap">${mapSVG(d)}</div>
+  body.innerHTML=`<div class="itgrid"><div class="mapwrap">${mapShell(d)}</div>
    <div class="tlcol">${banner}${head}<div class="tl" id="tlScroll">${stopCards(d)}${addStop}</div>${notes?`<div class="alerts">${notes}</div>`:''}${alerts}</div></div>`;
-  initMap(d);
+  (HAVE_L?initLeaflet:initMap)(d);
  }
  document.documentElement.style.setProperty('--itbarH',$('#itBar').offsetHeight+'px');
 }
 
-/* ══ Base map ══════════════════════════════════════════════════
+/* ══ Real map ══════════════════════════════════════════════════
+   Actual tiles, actual coastlines. CARTO's light basemap over
+   OpenStreetMap data — no API key, no billing account, and the
+   service worker keeps every tile you've already looked at, which
+   matters on H-58 where there's no signal to fetch new ones.
+
+   Google's Maps JavaScript API would need a key, a billing account
+   and a per-load charge, and its terms forbid caching tiles for
+   offline use — the one thing this trip actually needs.
+
+   North stays up: Leaflet never rotates. The camera follows the car,
+   and dragging the map hands control back to you until you tap
+   Following the car again.
+   ══════════════════════════════════════════════════════════════ */
+let mapCleanup=null;
+const HAVE_L=typeof L!=='undefined';
+const TILES=matchMedia('(prefers-color-scheme:dark)').matches
+ ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+ : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+const FOLLOW_Z=10;
+
+function mapShell(day){
+ if(!HAVE_L)return mapSVG(day);
+ const stops=stopsWithLL(day);
+ if(!stops.length)return`<div class="mapcard"><div class="mapnone">No coordinates on this day yet.<br>Add them under Edit and the map draws itself.</div></div>`;
+ return`<div class="mapcard"><div class="leaf" id="lmap"></div>
+  <button class="mapzoom" id="mapZoom">${S.follow?'Following the car':'Whole day'}</button>
+  <div class="mapnow" id="mapNow"><b>${esc(stops[0].n||'')}</b><i>${esc(stops[0].t||'')}</i></div></div>`;
+}
+
+function initLeaflet(day){
+ const host=document.getElementById('lmap');if(!host)return;
+ const stops=stopsWithLL(day);if(!stops.length)return;
+ const ll=stops.map(s=>L.latLng(s.ll[0],s.ll[1]));
+
+ const map=L.map(host,{zoomControl:false,attributionControl:true,scrollWheelZoom:false,
+  dragging:true,tap:true,zoomSnap:.25,fadeAnimation:false});
+ L.tileLayer(TILES,{maxZoom:19,minZoom:5,crossOrigin:true,
+  attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'}).addTo(map);
+
+ const bounds=L.latLngBounds(ll).pad(.18);
+ if(S.follow)map.setView(ll[0],FOLLOW_Z,{animate:false}); else map.fitBounds(bounds,{animate:false});
+
+ L.polyline(ll,{color:'#FF6B5A',weight:9,opacity:.22,lineCap:'round',lineJoin:'round'}).addTo(map);
+ L.polyline(ll,{color:'#FFFFFF',weight:6,opacity:.75,lineCap:'round',lineJoin:'round'}).addTo(map);
+ const done=L.polyline([ll[0]],{color:'#E0417F',weight:4.4,lineCap:'round',lineJoin:'round'}).addTo(map);
+
+ const marks=stops.map((s,i)=>L.marker(ll[i],{interactive:false,keyboard:false,zIndexOffset:-100,
+  icon:L.divIcon({className:'',iconSize:[13,13],iconAnchor:[6.5,6.5],
+   html:`<span class="stopmark${s.key?' key':''}" style="opacity:.55"><i></i><b>${esc(s.n||'')}</b></span>`})}).addTo(map));
+
+ const car=L.marker(ll[0],{interactive:false,keyboard:false,zIndexOffset:900,
+  icon:L.divIcon({className:'carmark',iconSize:[90,64],iconAnchor:[45,32],
+   html:`<svg viewBox="-32 -23 64 46" width="90" height="64" xmlns="http://www.w3.org/2000/svg">
+    <defs><linearGradient id="carSheen2" x1="0" y1="-14" x2="0" y2="14" gradientUnits="userSpaceOnUse">
+     <stop stop-color="#fff" stop-opacity=".22"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".22"/></linearGradient>
+     <filter id="soft2" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="4"/></filter></defs>
+    ${CAR.replace(/url\(#carSheen\)/g,'url(#carSheen2)').replace(/url\(#soft\)/g,'url(#soft2)')}</svg>`})}).addTo(map);
+ const carSvg=car.getElement()&&car.getElement().querySelector('svg');
+
+ // cumulative metres, so the car moves at a constant speed along the day
+ const seg=[],cum=[0];let total=0;
+ for(let i=0;i<ll.length-1;i++){const m=map.distance(ll[i],ll[i+1]);seg.push(m);total+=m;cum.push(total)}
+
+ function at(dist){
+  dist=clamp(dist,0,total);
+  let i=0;while(i<seg.length-1&&cum[i+1]<dist)i++;
+  const t=seg[i]?(dist-cum[i])/seg[i]:0,a=ll[i],b=ll[i+1]||ll[i];
+  return{p:L.latLng(a.lat+(b.lat-a.lat)*t,a.lng+(b.lng-a.lng)*t),a,b,i};
+ }
+ let aim=0,cur=0,raf=null,ang=0,held=false,intro=null;
+ map.on('dragstart',()=>{held=true});
+
+ function draw(dist){
+  const{p,a,b}=at(dist);
+  const pa=map.latLngToLayerPoint(a),pb=map.latLngToLayerPoint(b);
+  if(Math.hypot(pb.x-pa.x,pb.y-pa.y)>1){
+   const target=Math.atan2(pb.y-pa.y,pb.x-pa.x)*180/Math.PI;
+   let dA=((target-ang+540)%360)-180;ang+=dA*0.34;
+  }
+  car.setLatLng(p);
+  if(carSvg)carSvg.style.transform=`rotate(${ang.toFixed(1)}deg)`;
+  const upto=[];for(let k=0;k<ll.length;k++){if(cum[k]<=dist)upto.push(ll[k])}
+  upto.push(p);done.setLatLngs(upto);
+  if(S.follow&&!held)map.setView(p,map.getZoom(),{animate:false});
+ }
+ function tick(){const d=aim-cur;
+  if(Math.abs(d)<1){cur=aim;draw(cur);raf=null;return}
+  cur+=d*0.12;draw(cur);raf=requestAnimationFrame(tick)}
+
+ const cards=[...$('#tlScroll').querySelectorAll('.stop')];
+ const pane=$('#pane-itinerary');
+ function onScroll(){
+  const focus=pane.getBoundingClientRect().top+pane.clientHeight*0.45;
+  let idx=0,frac=0;
+  for(let i=0;i<cards.length;i++){
+   const r=cards[i].getBoundingClientRect();
+   if(r.top<=focus){idx=i;const nx=cards[i+1];
+    if(nx){const span=nx.getBoundingClientRect().top-r.top;frac=span>0?clamp((focus-r.top)/span,0,1):0}else frac=0}
+  }
+  aim=cum[idx]+(cum[idx+1]!==undefined?(cum[idx+1]-cum[idx])*frac:0);
+  if(intro)return;
+  if(!raf)raf=requestAnimationFrame(tick);
+  cards.forEach((c,i)=>c.classList.toggle('here',i===idx));
+  marks.forEach((m,i)=>{const el=m.getElement();if(el)el.firstChild.style.opacity=i<=idx?'1':'.55'});
+  const now=$('#mapNow'),st=stops[idx];
+  if(now&&st)now.innerHTML=`<b>${esc(st.n||'')}</b><i>${esc(st.t||'')}${st.z?' '+esc(st.z):''}</i>`;
+ }
+ pane.addEventListener('scroll',onScroll,{passive:true});
+ setTimeout(()=>map.invalidateSize(),60);
+ draw(0);onScroll();
+
+ // one lap of the day on arrival, so the map is moving when you open it
+ if(total&&!matchMedia('(prefers-reduced-motion:reduce)').matches){
+  const t0=performance.now(),dur=2600,wasFollowing=S.follow;
+  // The lap is flown from the whole-day view: chasing it at street zoom
+  // would drag half of Wisconsin's tiles down for two seconds of animation.
+  if(wasFollowing){held=true;map.fitBounds(bounds,{animate:false})}
+  const land=()=>{intro=null;
+   if(wasFollowing){held=false;map.setView(at(cur).p,FOLLOW_Z,{animate:true})}
+   onScroll();if(!raf)raf=requestAnimationFrame(tick)};
+  const step=ts=>{if(intro===null)return;
+   const k=clamp((ts-t0)/dur,0,1),e=k<.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2;
+   cur=total*e;draw(cur);
+   if(k<1)intro=requestAnimationFrame(step);else land()};
+  intro=requestAnimationFrame(step);
+  const stop=()=>{if(intro){cancelAnimationFrame(intro);land()}};
+  pane.addEventListener('scroll',stop,{once:true,passive:true});
+  host.addEventListener('pointerdown',stop,{once:true});
+ }
+
+ const zb=$('#mapZoom');
+ if(zb)zb.onclick=()=>{
+  if(held&&S.follow){held=false;zb.textContent='Following the car';draw(cur);map.setView(at(cur).p,FOLLOW_Z,{animate:true});return}
+  S.follow=!S.follow;held=false;zb.textContent=S.follow?'Following the car':'Whole day';
+  if(S.follow){map.setView(at(cur).p,FOLLOW_Z,{animate:true})}else{map.fitBounds(bounds,{animate:true})}
+ };
+
+ mapCleanup=()=>{pane.removeEventListener('scroll',onScroll);
+  if(raf)cancelAnimationFrame(raf);if(intro)cancelAnimationFrame(intro);intro=null;
+  try{map.remove()}catch(e){}};
+}
+
+/* ══ Drawn map — the offline fallback ══════════════════════════
    Drawn from real coordinates: Lake Superior's south shore, Lake
    Michigan with Green Bay and the Door Peninsula, Grand Island,
    Lake Winnebago, and the highways this trip actually uses.
@@ -1039,7 +1196,6 @@ function mapSVG(day){
  <div class="maplabel">North up \u00b7 not for navigation \u00b7 drive with offline Google Maps</div></div>`;
 }
 
-let mapCleanup=null;
 function initMap(day){
  const svg=$('#pane-itinerary .mapcard svg');if(!svg)return;
  const route=svg.querySelector('#routeDone'),car=svg.querySelector('#carNode'),cam=svg.querySelector('#cam');

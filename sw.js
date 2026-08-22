@@ -1,6 +1,6 @@
 /* Sunrise service worker — offline shell + notification host.
    Bump CACHE when you change index.html, or phones keep the old copy. */
-const CACHE = 'sunrise-v4';
+const CACHE = 'sunrise-v5';
 
 const SHELL = [
   './',
@@ -25,7 +25,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE && !k.endsWith('-tiles')).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -38,6 +38,21 @@ self.addEventListener('fetch', e => {
 
   // Never cache the database — it must always be live.
   if (/firebaseio\.com|firebasedatabase\.app|googleapis\.com/.test(url.hostname)) return;
+
+  // Map tiles and the Leaflet bundle: cache-first and kept, so a map you've
+  // already looked at still draws on H-58 where there is no signal.
+  if (/basemaps\.cartocdn\.com|unpkg\.com/.test(url.hostname)) {
+    e.respondWith(
+      caches.match(req).then(hit => hit || fetch(req).then(res => {
+        if (res.ok || res.type === 'opaque') {
+          const copy = res.clone();
+          caches.open(CACHE + '-tiles').then(c => c.put(req, copy));
+        }
+        return res;
+      }).catch(() => hit))
+    );
+    return;
+  }
 
   // Firebase SDK from the CDN: cache-first, it's versioned and immutable.
   if (url.hostname === 'www.gstatic.com') {
