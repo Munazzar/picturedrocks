@@ -205,6 +205,27 @@ button{border:0;background:none;cursor:pointer;padding:0}
 .more{flex:none;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;color:var(--ink-3)}
 .more:active{background:var(--card-2)}
 
+/* ── Pins, and picking things up ───────────────────────────────────── */
+.shead{padding:0}
+.sfold{display:flex;align-items:center;gap:11px;flex:1;min-width:0;padding:13px 4px 13px 15px;text-align:left}
+.spin{flex:none;width:34px;height:34px;margin-right:9px;border-radius:50%;display:grid;place-items:center;color:var(--ink-3);opacity:.45;transition:opacity .2s var(--ease),color .2s var(--ease),transform .2s var(--ease)}
+.spin svg{width:16px;height:16px}
+.spin:active{transform:scale(.86)}
+.spin[aria-pressed="true"]{opacity:1;color:var(--sun-4)}
+.spin[aria-pressed="true"] svg{fill:currentColor;stroke-width:1.4}
+@media (hover:hover){.spin{opacity:.2}.sect:hover .spin{opacity:.55}.sect:hover .spin[aria-pressed="true"]{opacity:1}}
+.sect.pinned{box-shadow:var(--shadow),inset 3px 0 0 var(--sun-4)}
+.chip.pin{border-color:var(--sun-4)}
+.mode-list .cdown,.mode-list .horizon,.mode-list [data-tab="itinerary"]{display:none}
+
+.list.arranging{cursor:grabbing}
+.lift{position:relative;z-index:40;box-shadow:var(--shadow-lg);border-radius:var(--r-lg);background:var(--card);
+ transform:scale(1.015);opacity:.97;pointer-events:none;transition:none}
+.row.lift{border-top-color:transparent}
+.gap{outline:2px dashed var(--line);outline-offset:-3px;border-radius:var(--r-lg);opacity:.5}
+body.arranging{-webkit-user-select:none;user-select:none}
+@media (prefers-reduced-motion:reduce){.lift{transform:none}}
+
 /* ═══ EMPTY ════════════════════════════════════════════════════ */
 .blank{padding:46px 30px;text-align:center}
 .blank h2{margin:16px 0 7px;font-size:19px;font-weight:660;letter-spacing:-.025em}
@@ -380,6 +401,7 @@ button{border:0;background:none;cursor:pointer;padding:0}
 .setrow b{font-weight:520}
 .setrow i{margin-left:auto;font-style:normal;font:500 13px/1 var(--mono);color:var(--ink-3);text-align:right}
 .setrow p{margin:4px 0 0;font-size:12.5px;color:var(--ink-3);line-height:1.45}
+.sethint{margin:11px 17px 3px;font-size:12.5px;color:var(--ink-3);line-height:1.5}
 .setrow.warn b{color:var(--danger)}
 .chk{flex:none;width:22px;height:22px;border-radius:7px;border:1.8px solid var(--ink-3);display:grid;place-items:center;transition:.2s var(--ease)}
 .chk svg{width:12px;height:12px;color:#fff;opacity:0;transform:scale(.4);transition:.2s var(--ease)}
@@ -539,12 +561,12 @@ button{border:0;background:none;cursor:pointer;padding:0}
   <!-- ══════ SHARE ══════ -->
   <div class="pane" id="pane-share">
     <header class="sky">
-      <div class="brow"><div class="trip"><h1>Share &amp; sync</h1></div>
+      <div class="brow"><div class="trip"><h1>Settings</h1></div>
         <div class="browR"><button class="skybtn" data-theme-toggle aria-label="Switch between day and night">
           <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M21.4 12h-2.2M4.8 12H2.6M18.6 5.4l-1.6 1.6M7 17l-1.6 1.6M18.6 18.6 17 17M7 7 5.4 5.4"/></svg>
           <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4 8.4 8.4 0 1 0 20 14.2Z"/></svg>
         </button></div></div>
-      <p class="lede">Anyone with the link edits the same list. No accounts, no passwords.</p>
+      <p class="lede">How this list behaves, who else sees it, and how it looks. No accounts, no passwords.</p>
       <div style="height:16px"></div>
     </header>
     <div class="wrap"><div class="setwrap">
@@ -554,6 +576,20 @@ button{border:0;background:none;cursor:pointer;padding:0}
         <button class="setrow" id="copyBtn"><div><b>Copy invite link</b><p>Send it to everyone coming. They open it and they're in.</p></div></button>
         <button class="setrow" id="joinBtn"><div><b>Join a different list</b><p>Enter a room code someone gave you.</p></div></button>
         <button class="setrow" id="textBtn"><div><b>Copy the list as text</b><p>Plain text with tick boxes, for a message to whoever isn't on the app.</p></div></button>
+      </div>
+      <div class="setgrp">
+        <h3>What this list is for</h3>
+        <div class="setseg" id="kindSeg" role="group" aria-label="Kind of list">
+          <button data-set-kind="trip" aria-pressed="true">A trip</button>
+          <button data-set-kind="list" aria-pressed="false">A plain list</button>
+        </div>
+        <p class="sethint">A trip keeps the countdown, the sun arc and the itinerary tab. A plain list drops all three and calls things done rather than packed — for groceries, chores, a move, anything. It only changes this room, so Pictured Rocks stays a trip.</p>
+      </div>
+      <div class="setgrp">
+        <h3>Arranging</h3>
+        <p class="sethint">Hold an item or a category heading until it lifts, then move it. Items can cross into another category; categories only move within their own block, so pinned ones stay at the top. The pin sits at the right-hand end of every heading.</p>
+        <button class="setrow" id="unpinBtn"><div><b>Unpin every category</b><p id="unpinBody">Nothing is pinned right now.</p></div></button>
+        <button class="setrow" id="reorderBtn"><div><b>Put the order back</b><p>Categories and items return to the order they had before anyone moved them.</p></div></button>
       </div>
       <div class="setgrp">
         <h3>Look &amp; feel</h3>
@@ -600,7 +636,7 @@ button{border:0;background:none;cursor:pointer;padding:0}
       <button class="tab" role="tab" aria-selected="false" data-tab="itinerary">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="16" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><circle cx="9" cy="15" r="1.1" fill="currentColor" stroke="none"/></svg>Itinerary</button>
       <button class="tab" role="tab" aria-selected="false" data-tab="share">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="17.5" cy="6" r="2.8"/><circle cx="6.5" cy="12" r="2.8"/><circle cx="17.5" cy="18" r="2.8"/><path d="m9 10.6 6-3.1M9 13.4l6 3.1"/></svg>Share</button>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.1"/><path d="M19.4 14.6a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.11a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.11a1.7 1.7 0 0 0 1.56-1.11 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9a1.7 1.7 0 0 0 1-1.56V3a2 2 0 1 1 4 0v.11a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V9a1.7 1.7 0 0 0 1.56 1H21a2 2 0 1 1 0 4h-.11a1.7 1.7 0 0 0-1.49 1.03Z"/></svg>Settings</button>
     </nav>
     <div class="quick">
       <button class="qbtn" id="addBtn">
@@ -879,7 +915,7 @@ const Store={
     const a=await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js');
     const d=await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js');
     this.fb=d;this.db=d.getDatabase(a.initializeApp(FIREBASE_CONFIG));
-    d.onValue(d.ref(this.db,'rooms/'+ROOM),s=>{const v=s.val()||{};cb(v.items||{},v.name||TRIP.title,v.checks||{},v.days||null)});
+    d.onValue(d.ref(this.db,'rooms/'+ROOM),s=>{const v=s.val()||{};cb(v.items||{},v.name||TRIP.title,v.checks||{},v.days||null,v.meta||null)});
     this.mode='live';return;
    }catch(e){console.warn('Live sync unavailable, staying local.',e)}
   }
@@ -907,9 +943,9 @@ const Store={
   }
   return [...out.values()].sort((a,b)=>a.code.localeCompare(b.code));
  },
- read(){const v=this.local();this.cb(v.items||{},v.name||TRIP.title,v.checks||{},v.days||null)},
+ read(){const v=this.local();this.cb(v.items||{},v.name||TRIP.title,v.checks||{},v.days||null,v.meta||null)},
  local(){const r=localStorage.getItem(this.key);return r?JSON.parse(r):{items:{},name:TRIP.title,checks:{}}},
- flush(v){localStorage.setItem(this.key,JSON.stringify(v));try{this.chan&&this.chan.postMessage(1)}catch(e){}this.cb(v.items||{},v.name,v.checks||{},v.days||null)},
+ flush(v){localStorage.setItem(this.key,JSON.stringify(v));try{this.chan&&this.chan.postMessage(1)}catch(e){}this.cb(v.items||{},v.name,v.checks||{},v.days||null,v.meta||null)},
  put(id,it){if(this.mode==='live')return this.fb.update(this.fb.ref(this.db,'rooms/'+ROOM+'/items'),{[id]:it});const v=this.local();v.items[id]=it;this.flush(v)},
  putMany(m){if(this.mode==='live')return this.fb.update(this.fb.ref(this.db,'rooms/'+ROOM+'/items'),m);const v=this.local();Object.assign(v.items,m);this.flush(v)},
  del(id){if(this.mode==='live')return this.fb.remove(this.fb.ref(this.db,'rooms/'+ROOM+'/items/'+id));const v=this.local();delete v.items[id];this.flush(v)},
@@ -917,12 +953,40 @@ const Store={
  rename(n){if(this.mode==='live')return this.fb.set(this.fb.ref(this.db,'rooms/'+ROOM+'/name'),n);const v=this.local();v.name=n;this.flush(v)},
  check(i,on){if(this.mode==='live')return this.fb.update(this.fb.ref(this.db,'rooms/'+ROOM+'/checks'),{[i]:on});const v=this.local();v.checks=v.checks||{};v.checks[i]=on;this.flush(v)},
  setDays(d){if(this.mode==='live')return this.fb.set(this.fb.ref(this.db,'rooms/'+ROOM+'/days'),d);const v=this.local();v.days=d;this.flush(v)},
- clearDays(){if(this.mode==='live')return this.fb.remove(this.fb.ref(this.db,'rooms/'+ROOM+'/days'));const v=this.local();delete v.days;this.flush(v)}
+ clearDays(){if(this.mode==='live')return this.fb.remove(this.fb.ref(this.db,'rooms/'+ROOM+'/days'));const v=this.local();delete v.days;this.flush(v)},
+ /* meta = { kind, pins:{cat:true}, order:{cat:index} } — how this list is
+    arranged, shared with everyone the same way the items are. */
+ setMeta(m){if(this.mode==='live')return this.fb.set(this.fb.ref(this.db,'rooms/'+ROOM+'/meta'),m);const v=this.local();v.meta=m;this.flush(v)}
 };
 
 const S={items:{},name:TRIP.title,checks:{},q:'',cat:'all',hide:false,
  shut:new Set(JSON.parse(localStorage.getItem('backpacker:shut')||'[]')),day:0,itView:'map',tab:'packing',
- days:null,edit:false,follow:true};
+ days:null,edit:false,follow:true,meta:{}};
+
+/* ═══ Arrangement — pins, category order, item order ══════════════════
+   Everything here is a view over S.meta plus each item's own `ord`, so a
+   list that was never touched behaves exactly as it always did. */
+const PINS =()=>S.meta.pins||{};
+const ORDER=()=>S.meta.order||{};
+const pinned=k=>!!PINS()[k];
+const isList=()=>S.meta.kind==='list';
+function catRank(k){
+ const o=ORDER()[k];
+ const i=CAT_NAMES.indexOf(k);
+ const base=Number.isFinite(o)?o:(i>=0?i:900);
+ return (pinned(k)?-1e6:0)+base;
+}
+const catSort=(a,b)=>catRank(a)-catRank(b)||a.localeCompare(b);
+const ordOf=it=>Number.isFinite(it.ord)?it.ord:1e9;
+function writeMeta(next){const prev=JSON.parse(JSON.stringify(S.meta||{}));S.meta=next;Store.setMeta(next);return prev}
+function togglePin(k){
+ const pins={...PINS()};
+ if(pins[k])delete pins[k];else pins[k]=true;
+ const was=pinned(k);
+ const prev=writeMeta({...S.meta,pins});
+ buzz(was?6:[10,40,10]);paintChips();paintList();
+ toast(was?`${k} unpinned`:`${k} pinned to the top`,()=>{writeMeta(prev);paintChips();paintList()});
+}
 
 /* The itinerary starts as the plan below and becomes editable data the
    moment anyone touches it. DAYS() is the single source of truth. */
@@ -991,7 +1055,7 @@ function paintHorizon(){
  const all=Object.values(S.items),done=all.filter(i=>i.packed).length;
  const t=all.length?done/all.length:0;
  aimSun(t);
- $('#pct').innerHTML=Math.round(t*100)+'<small>% packed</small>';
+ $('#pct').innerHTML=Math.round(t*100)+`<small>% ${isList()?'done':'packed'}</small>`;
  $('#statR').textContent=all.length?`${done} of ${all.length} done · ${all.length-done} to go`:'Nothing on the list yet';
 }
 
@@ -1003,18 +1067,18 @@ function visible(){
   if(S.cat!=='all'&&it.cat!==S.cat)return false;
   if(q&&!(norm(it.name).includes(q)||norm(it.cat).includes(q)||norm(it.note||'').includes(q)||norm(it.who||'').includes(q)))return false;
   return true;
- }).sort((a,b)=>(a.packed-b.packed)||a.name.localeCompare(b.name));
+ }).sort((a,b)=>(ordOf(a)-ordOf(b))||(a.packed-b.packed)||a.name.localeCompare(b.name));
 }
 function paintChips(){
  const c={};for(const it of Object.values(S.items))c[it.cat]=(c[it.cat]||0)+1;
- const used=CAT_NAMES.filter(k=>c[k]).concat(Object.keys(c).filter(k=>!CAT_NAMES.includes(k)));
+ const used=Object.keys(c).sort(catSort);
  $('#chips').innerHTML=[`<button class="chip" data-cat="all" aria-pressed="${S.cat==='all'}">Everything<b>${Object.keys(S.items).length}</b></button>`]
-  .concat(used.map(k=>`<button class="chip" data-cat="${esc(k)}" aria-pressed="${S.cat===k}">${(CAT[k]||{}).icon||'✨'} ${esc(k)}<b>${c[k]}</b></button>`)).join('');
+  .concat(used.map(k=>`<button class="chip${pinned(k)?' pin':''}" data-cat="${esc(k)}" aria-pressed="${S.cat===k}">${(CAT[k]||{}).icon||'✨'} ${esc(k)}<b>${c[k]}</b></button>`)).join('');
 }
 function paintList(){
  const items=visible(),box=$('#list');
  if(!Object.keys(S.items).length){
-  box.innerHTML=`<div class="blank"><div class="orb"></div><h2>An empty bag</h2>
+  box.innerHTML=`<div class="blank"><div class="orb"></div><h2>${isList()?'Nothing here yet':'An empty bag'}</h2>
    <p>Add things one at a time, or drop in a set built for this trip — the cooler, the infant PFD, the cold-on-the-water layers, locking up the house.</p>
    <button class="solid" id="seedBtn">Add ${STARTER.length} trip essentials</button></div>`;
   $('#seedBtn').onclick=seed;return;
@@ -1026,15 +1090,18 @@ function paintList(){
   const b=$('#addFromSearch');if(b)b.onclick=()=>openEditor(null,S.q);return;
  }
  const g={};for(const it of items)(g[it.cat]=g[it.cat]||[]).push(it);
- const order=CAT_NAMES.filter(k=>g[k]).concat(Object.keys(g).filter(k=>!CAT_NAMES.includes(k)));
+ const order=Object.keys(g).sort(catSort);
  box.innerHTML=order.map(k=>{
   const rows=g[k],done=rows.filter(i=>i.packed).length;
-  return `<section class="sect${S.shut.has(k)?' shut':''}">
-   <button class="shead" data-fold="${esc(k)}"><span class="sicon">${(CAT[k]||{}).icon||'✨'}</span>
+  return `<section class="sect${S.shut.has(k)?' shut':''}${pinned(k)?' pinned':''}" data-cat="${esc(k)}" data-pinned="${pinned(k)?1:0}">
+   <div class="shead">
+   <button class="sfold" data-fold="${esc(k)}"><span class="sicon">${(CAT[k]||{}).icon||'✨'}</span>
    <span class="stitle"><span>${esc(k)}</span><span class="bar"><i style="width:${done/rows.length*100}%"></i></span></span>
    <span class="scount">${done}/${rows.length}</span>
    <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
-   <div class="rows">${rows.map(it=>`<div class="row${it.packed?' done':''}" data-id="${it.id}">
+   <button class="spin" data-pin="${esc(k)}" aria-pressed="${pinned(k)}" aria-label="${pinned(k)?'Unpin':'Pin'} ${esc(k)}" title="${pinned(k)?'Unpin':'Pin to the top'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 3h6l-1 6 3 3v2H7v-2l3-3-1-6Z"/></svg></button>
+   </div>
+   <div class="rows" data-cat="${esc(k)}">${rows.map(it=>`<div class="row${it.packed?' done':''}" data-id="${it.id}">
     <button class="tick" data-tick="${it.id}" aria-pressed="${!!it.packed}" aria-label="Mark ${esc(it.name)} packed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.5 5 5 10-11"/></svg></button>
     <button class="face" data-edit="${it.id}"><span style="min-width:0"><span class="name">${esc(it.name)}</span>${it.note?`<span class="note">${esc(it.note)}</span>`:''}</span>${it.who?`<span class="who">${esc(it.who)}</span>`:''}${it.qty>1?`<span class="qty">×${it.qty}</span>`:''}</button>
     <button class="more" data-more="${it.id}" aria-label="Options"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg></button>
@@ -1045,8 +1112,22 @@ function paintChecks(){
  $('#checkRows').innerHTML=TRIP.checks.map((c,i)=>`<button class="setrow${S.checks[i]?' ticked':''}" data-check="${i}">
   <span class="chk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.5 5 5 10-11"/></svg></span><b>${esc(c)}</b></button>`).join('');
 }
-function paintAll(){paintHorizon();paintChips();paintList();paintChecks();
- $('#tripName').textContent=S.name;$('#nameVal').textContent=S.name}
+function paintAll(){applyKind();paintHorizon();paintChips();paintList();paintChecks();
+ $('#tripName').textContent=S.name;$('#nameVal').textContent=S.name;refreshArrangeRows()}
+
+function applyKind(){
+ const list=isList();
+ $('#app').classList.toggle('mode-list',list);
+ $('#hideBtn').textContent=list?'Hide done':'Hide packed';
+ $$('#kindSeg [data-set-kind]').forEach(b=>b.setAttribute('aria-pressed',String((b.dataset.setKind==='list')===list)));
+ if(list&&S.tab==='itinerary')goTab('packing');
+ sizeAura();
+}
+function refreshArrangeRows(){
+ const n=Object.keys(PINS()).length;
+ const b=$('#unpinBody');if(!b)return;
+ b.textContent=n?`${n} categor${n===1?'y is':'ies are'} held at the top.`:'Nothing is pinned right now.';
+}
 
 function toggle(id){
  const it=S.items[id];if(!it)return;
@@ -1102,7 +1183,7 @@ const noteCards=(list,editable)=>list.map((n,i)=>`<div class="alert"><em>${esc(n
 function paintItin(){
  S.day=clamp(S.day,0,DAYS().length-1);
  const d=DAYS()[S.day],body=$('#itBody');
- const banner=S.edit?`<div class="edbanner">Editing. Everything you change here syncs to everyone on the list \u2014 stops, times, notes and days. There's an undo of last resort under Share \u2192 Reset the itinerary.</div>`:'';
+ const banner=S.edit?`<div class="edbanner">Editing. Everything you change here syncs to everyone on the list \u2014 stops, times, notes and days. There's an undo of last resort under Settings \u2192 Reset the itinerary.</div>`:'';
  const head=`<div class="dayhead"><h2>${esc(d.title)}</h2><p>${esc(d.sub)}</p>
   <div class="facts">${(d.facts||[]).map(f=>`<span class="fact">${esc(f)}</span>`).join('')}</div>
   ${S.edit?`<div class="edrow"><button class="mini" data-act="day-edit">Edit this day</button><button class="mini" data-act="note-add">Add a note</button></div>`:''}</div>`;
@@ -1553,6 +1634,142 @@ function initMap(day){
   if(raf)cancelAnimationFrame(raf);if(intro)cancelAnimationFrame(intro);intro=null};
 }
 
+/* ═══ Picking things up ═══════════════════════════════════════
+   One gesture, two jobs. Hold an item or a category heading until it
+   lifts, then move it. On a mouse the hold is shorter, because a mouse
+   never scrolls the page by accident; on a finger it's long enough that
+   an ordinary flick still scrolls. Anything under 8px of movement before
+   the hold completes is a tap or the start of a scroll, and cancels.
+   Sections only ever land among sections of the same pinned state, so
+   the pinned block at the top stays a block. */
+let drag=null,justDragged=false;
+const LONG_TOUCH=430,LONG_MOUSE=240;
+
+function rowsOrder(sect){return [...sect.querySelectorAll('.row')].map(r=>r.dataset.id)}
+let nudged=0;
+function filteredNudge(){
+ const now=Date.now();if(now-nudged<6000)return;nudged=now;
+ toast('Clear the search and filters to rearrange');
+}
+
+function commitRows(touched){
+ /* Renumber every row of every section the drag touched, and move any
+    item that changed category. One write, one undo. */
+ const before={},patch={};
+ for(const sect of touched){
+  const cat=sect.dataset.cat;
+  rowsOrder(sect).forEach((id,i)=>{
+   const it=S.items[id];if(!it)return;
+   if(!before[id])before[id]={...it};
+   if(it.ord!==i||it.cat!==cat)patch[id]={...it,cat,ord:i};
+  });
+ }
+ const ids=Object.keys(patch);
+ if(!ids.length)return false;
+ Object.assign(S.items,patch);
+ Store.putMany(patch);
+ const undo={};for(const id of ids)undo[id]=before[id];
+ toast(ids.length===1?'Moved':`${ids.length} items rearranged`,()=>{Object.assign(S.items,undo);Store.putMany(undo);paintList();paintChips()});
+ return true;
+}
+
+function commitSections(){
+ const order={};
+ [...$('#list').querySelectorAll('.sect')].forEach((sec,i)=>{order[sec.dataset.cat]=i});
+ const prev=writeMeta({...S.meta,order});
+ paintChips();
+ toast('Categories rearranged',()=>{writeMeta(prev);paintChips();paintList()});
+}
+
+function autoScroll(y){
+ const pane=$('#pane-packing'),r=pane.getBoundingClientRect(),edge=68;
+ let d=0;
+ if(y<r.top+edge)d=-(r.top+edge-y)/edge*16;
+ else if(y>r.bottom-edge)d=(y-(r.bottom-edge))/edge*16;
+ if(d)pane.scrollTop+=d;
+}
+
+function startDrag(el,kind,y){
+ drag={el,kind,y0:y,dy:0,touched:new Set(),moved:false};
+ if(kind==='row')drag.touched.add(el.closest('.sect'));
+ el.classList.add('lift');
+ $('#list').classList.add('arranging');document.body.classList.add('arranging');
+ buzz([12,30,8]);
+}
+
+function moveDrag(y){
+ if(!drag)return;
+ drag.dy=y-drag.y0;
+ drag.el.style.transform=`translateY(${drag.dy}px)`+(matchMedia('(prefers-reduced-motion:reduce)').matches?'':' scale(1.015)');
+ autoScroll(y);
+ const el=drag.el;
+ if(drag.kind==='row'){
+  const targets=[...$('#list').querySelectorAll('.sect:not(.shut) .row')].filter(r=>r!==el);
+  let placed=false;
+  for(const t of targets){
+   const b=t.getBoundingClientRect();
+   if(y<b.top+b.height/2){t.parentNode.insertBefore(el,t);placed=true;break}
+  }
+  if(!placed){
+   /* past every row: land at the end of whichever open section we're over */
+   const sects=[...$('#list').querySelectorAll('.sect:not(.shut)')];
+   const over=sects.find(sc=>{const b=sc.getBoundingClientRect();return y>=b.top&&y<=b.bottom})||sects[sects.length-1];
+   if(over)over.querySelector('.rows').appendChild(el);
+  }
+  drag.touched.add(el.closest('.sect'));
+ }else{
+  const mine=el.dataset.pinned;
+  const targets=[...$('#list').querySelectorAll('.sect')].filter(sc=>sc!==el&&sc.dataset.pinned===mine);
+  let placed=false;
+  for(const t of targets){
+   const b=t.getBoundingClientRect();
+   if(y<b.top+b.height/2){$('#list').insertBefore(el,t);placed=true;break}
+  }
+  if(!placed&&targets.length)$('#list').insertBefore(el,targets[targets.length-1].nextSibling);
+ }
+ drag.moved=true;
+}
+
+function endDrag(){
+ if(!drag)return;
+ const{el,kind,touched,moved}=drag;drag=null;
+ el.style.transform='';el.classList.remove('lift');
+ $('#list').classList.remove('arranging');document.body.classList.remove('arranging');
+ if(!moved)return;
+ justDragged=true;setTimeout(()=>{justDragged=false},0);
+ buzz(9);
+ if(kind==='row'){if(commitRows(touched))paintChips();else paintList()}
+ else commitSections();
+}
+
+(function arrangeGesture(){
+ const list=$('#list');
+ let hold=null,down=null;
+ const clear=()=>{if(hold){clearTimeout(hold);hold=null}down=null};
+ list.addEventListener('pointerdown',e=>{
+  if(drag||e.button)return;
+  if(e.target.closest('.spin, .tick, .more'))return;
+  const row=e.target.closest('.row'),head=e.target.closest('.shead');
+  const el=row||(head?head.closest('.sect'):null);
+  if(!el)return;
+  if(S.q||S.cat!=='all'||S.hide){filteredNudge();return}
+  const kind=row?'row':'sect';
+  down={x:e.clientX,y:e.clientY};
+  hold=setTimeout(()=>{hold=null;startDrag(el,kind,down.y)},e.pointerType==='mouse'?LONG_MOUSE:LONG_TOUCH);
+ });
+ list.addEventListener('pointermove',e=>{
+  if(!down||drag)return;
+  if(Math.abs(e.clientY-down.y)>8||Math.abs(e.clientX-down.x)>8)clear();
+ });
+ addEventListener('pointermove',e=>{if(drag)moveDrag(e.clientY)},{passive:true});
+ addEventListener('pointerup',()=>{clear();endDrag()});
+ addEventListener('pointercancel',()=>{clear();endDrag()});
+ /* Once something is lifted the finger must stop scrolling the page. */
+ addEventListener('touchmove',e=>{if(drag)e.preventDefault()},{passive:false});
+ /* A drag that ends over a row shouldn't also open that row's editor. */
+ list.addEventListener('click',e=>{if(justDragged){e.stopPropagation();e.preventDefault()}},true);
+})();
+
 /* ═══ Sheets ══════════════════════════════════════════════════ */
 let editing=null,qty=1,actionId=null,confirmFn=null;
 const scrim=$('#scrim');
@@ -1661,6 +1878,7 @@ const restoreDays=snap=>()=>{
 
 /* ═══ Wiring ══════════════════════════════════════════════════ */
 $('#list').addEventListener('click',e=>{
+ const pn=e.target.closest('[data-pin]');if(pn)return togglePin(pn.dataset.pin);
  const t=e.target.closest('[data-tick]');if(t)return toggle(t.dataset.tick);
  const ed=e.target.closest('[data-edit]');if(ed)return openEditor(ed.dataset.edit);
  const m=e.target.closest('[data-more]');if(m)return openActions(m.dataset.more);
@@ -1835,6 +2053,29 @@ $('#rmFilter').oninput=e=>paintRooms(e.target.value);
 $('#rmClose').onclick=closeSheets;
 $('#rmManual').onclick=()=>{closeSheets();setTimeout(askRoomCode,220)};
 $('#joinBtn').onclick=askRoomCode;
+$('#kindSeg').addEventListener('click',e=>{
+ const b=e.target.closest('[data-set-kind]');if(!b)return;
+ const kind=b.dataset.setKind;
+ if((S.meta.kind==='list')===(kind==='list'))return;
+ const prev=writeMeta({...S.meta,kind});
+ buzz(8);paintAll();
+ toast(kind==='list'?'Now a plain list':'Now a trip',()=>{writeMeta(prev);paintAll()});
+});
+$('#unpinBtn').onclick=()=>{
+ if(!Object.keys(PINS()).length)return toast('Nothing was pinned');
+ const prev=writeMeta({...S.meta,pins:{}});
+ paintChips();paintList();
+ toast('Everything unpinned',()=>{writeMeta(prev);paintChips();paintList()});
+};
+$('#reorderBtn').onclick=()=>ask('Put the order back?','Categories go back to their built-in order and every item forgets where it was moved to. Pins are left alone.','Reset the order',()=>{
+ const prevMeta=JSON.parse(JSON.stringify(S.meta||{}));
+ const before={},patch={};
+ for(const [id,it] of Object.entries(S.items)) if(Number.isFinite(it.ord)){before[id]={...it};const c={...it};delete c.ord;patch[id]=c}
+ const next={...S.meta};delete next.order;writeMeta(next);
+ if(Object.keys(patch).length){Object.assign(S.items,patch);Store.putMany(patch)}
+ paintChips();paintList();
+ toast('Order reset',()=>{writeMeta(prevMeta);if(Object.keys(before).length){Object.assign(S.items,before);Store.putMany(before)}paintChips();paintList()});
+});
 if(ROOM==='list-all')setTimeout(openRoomPicker,400);
 $('#wipeBtn').onclick=()=>ask('Delete every item?','The whole packing list is cleared for everyone. Undo is offered for a few seconds afterwards.','Delete everything',()=>{
  const snap=JSON.parse(JSON.stringify(S.items));Store.wipe();
@@ -2048,7 +2289,7 @@ addEventListener('visibilitychange',()=>{
 
 /* ═══ Boot ════════════════════════════════════════════════════ */
 let prevSig=null,pending=0,daysSig=null;
-Store.init((items,name,checks,days)=>{
+Store.init((items,name,checks,days,meta)=>{
  const sig=JSON.stringify(Object.entries(items||{}).map(([k,v])=>k+':'+v.name+v.packed+v.qty).sort());
  if(prevSig!==null&&sig!==prevSig){
   const before=JSON.parse(prevSig),after=JSON.parse(sig);
@@ -2057,6 +2298,7 @@ Store.init((items,name,checks,days)=>{
  }
  prevSig=sig;
  S.items=items||{};S.name=name||TRIP.title;S.checks=checks||{};
+ S.meta=(meta&&typeof meta==='object')?meta:{};
  const nextDays=days?normDays(days):null;
  const dsig=JSON.stringify(nextDays);
  const changed=dsig!==daysSig;daysSig=dsig;S.days=nextDays;
