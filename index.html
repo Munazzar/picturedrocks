@@ -2024,7 +2024,7 @@ function goToRoom(code){
  location.hash='room='+c;location.reload();
 }
 function askRoomCode(){
- const r=prompt('Room code to join — or "list-all" to browse every list',ROOM);
+ const r=prompt('Room code to join',ROOM);
  if(!r||!r.trim())return;
  const c=r.trim().replace(/[^a-z0-9-]/gi,'').toLowerCase();
  if(c==='list-all'){openRoomPicker();return}
