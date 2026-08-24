@@ -684,6 +684,16 @@ button{border:0;background:none;cursor:pointer;padding:0}
   <div class="acts"><button class="primary" id="ntSave">Save note</button><button class="linkbtn" id="ntDel">Delete this note</button></div>
 </div>
 
+<div class="sheet" id="roomSheet" role="dialog" aria-modal="true" aria-labelledby="rmTitle">
+  <div class="grip"></div>
+  <div class="shd"><h2 id="rmTitle">Pick a list</h2><button class="x" id="rmClose" aria-label="Close">&#10005;</button></div>
+  <div class="body">
+    <div class="fld"><label for="rmFilter">Filter</label><input type="text" id="rmFilter" placeholder="Type to narrow the list" autocomplete="off"></div>
+    <div id="rmList" role="listbox" aria-label="Rooms"></div>
+  </div>
+  <div class="acts"><button class="linkbtn" id="rmManual">Type a room code instead</button></div>
+</div>
+
 <div class="confirm" id="confirm" role="alertdialog" aria-modal="true">
   <div class="cbox"><h3 id="cTitle">Delete this?</h3><p id="cBody">It disappears for everyone on the list.</p>
   <button class="go" id="cGo">Delete</button><button class="no" id="cNo">Keep it</button></div>
@@ -876,6 +886,26 @@ const Store={
   try{this.chan=new BroadcastChannel('backpacker:'+ROOM);this.chan.onmessage=()=>this.read()}catch(e){}
   addEventListener('storage',e=>{if(e.key===this.key)this.read()});
   this.read();
+ },
+ async listRooms(){
+  const out=new Map();
+  try{for(let i=0;i<localStorage.length;i++){
+   const k=localStorage.key(i);if(!k||k.indexOf('backpacker:')!==0)continue;
+   const code=k.slice(11);if(!/^[a-z0-9-]+$/.test(code))continue;
+   let v=null;try{v=JSON.parse(localStorage.getItem(k))}catch(e){continue}
+   if(!v||typeof v!=='object'||Array.isArray(v))continue;
+   if(!('items'in v||'name'in v||'checks'in v||'days'in v))continue;
+   out.set(code,{code,name:v.name||'',n:Object.keys(v.items||{}).length,where:'here'});
+  }}catch(e){}
+  if(this.mode==='live'){
+   try{
+    const s=await this.fb.get(this.fb.ref(this.db,'rooms'));
+    const all=s.val()||{};
+    for(const code in all){const v=all[code]||{};
+     out.set(code,{code,name:v.name||'',n:Object.keys(v.items||{}).length,where:'live'});}
+   }catch(e){console.warn('Could not list rooms',e);}
+  }
+  return [...out.values()].sort((a,b)=>a.code.localeCompare(b.code));
  },
  read(){const v=this.local();this.cb(v.items||{},v.name||TRIP.title,v.checks||{},v.days||null)},
  local(){const r=localStorage.getItem(this.key);return r?JSON.parse(r):{items:{},name:TRIP.title,checks:{}}},
@@ -1528,7 +1558,7 @@ let editing=null,qty=1,actionId=null,confirmFn=null;
 const scrim=$('#scrim');
 const openSheet=el=>{scrim.classList.add('on');el.classList.add('on')};
 function closeSheets(){scrim.classList.remove('on');
- ['#editor','#actions','#stopSheet','#daySheet','#noteSheet'].forEach(id=>$(id).classList.remove('on'));hideAc()}
+ ['#editor','#actions','#stopSheet','#daySheet','#noteSheet','#roomSheet'].forEach(id=>$(id).classList.remove('on'));hideAc()}
 scrim.onclick=closeSheets;$('#edClose').onclick=closeSheets;$('#acClose').onclick=closeSheets;
 addEventListener('keydown',e=>{if(e.key==='Escape'){closeSheets();$('#confirm').classList.remove('on')}});
 function openEditor(id,prefill){
@@ -1770,7 +1800,42 @@ $('#copyBtn').onclick=async()=>{
  const url=location.origin+location.pathname+'#room='+ROOM;
  try{await navigator.clipboard.writeText(url);toast('Invite link copied')}catch(e){prompt('Copy this link:',url)}};
 $('#renameBtn').onclick=()=>{const n=prompt('Name this trip',S.name);if(n&&n.trim())Store.rename(n.trim())};
-$('#joinBtn').onclick=()=>{const r=prompt('Room code to join',ROOM);if(r&&r.trim()){location.hash='room='+r.trim().replace(/[^a-z0-9-]/gi,'').toLowerCase();location.reload()}};
+function goToRoom(code){
+ const c=String(code||'').replace(/[^a-z0-9-]/gi,'').toLowerCase();
+ if(!c||c===ROOM){closeSheets();return}
+ location.hash='room='+c;location.reload();
+}
+function askRoomCode(){
+ const r=prompt('Room code to join — or "list-all" to browse every list',ROOM);
+ if(!r||!r.trim())return;
+ const c=r.trim().replace(/[^a-z0-9-]/gi,'').toLowerCase();
+ if(c==='list-all'){openRoomPicker();return}
+ goToRoom(c);
+}
+let roomCache=null;
+function paintRooms(q){
+ const box=$('#rmList'),f=(q||'').trim().toLowerCase();
+ if(!roomCache){box.innerHTML='<p class="setrow"><b>Looking for lists…</b></p>';return}
+ const rows=roomCache.filter(r=>!f||r.code.includes(f)||r.name.toLowerCase().includes(f));
+ if(!rows.length){box.innerHTML='<p class="setrow"><b>Nothing here</b><p>'+(roomCache.length?'No list matches that.':'No other lists found on this device or in live sync.')+'</p></p>';return}
+ box.innerHTML=rows.map(r=>
+  '<button class="setrow" role="option" data-room="'+r.code+'" aria-selected="'+(r.code===ROOM)+'"><div><b>'+
+  (r.name?esc(r.name):'#'+r.code)+'</b><p>#'+r.code+' &middot; '+r.n+' item'+(r.n===1?'':'s')+
+  (r.code===ROOM?' &middot; you are here':'')+'</p></div><i>'+(r.where==='live'?'live':'here')+'</i></button>'
+ ).join('');
+ box.querySelectorAll('[data-room]').forEach(b=>b.onclick=()=>goToRoom(b.dataset.room));
+}
+async function openRoomPicker(){
+ roomCache=null;$('#rmFilter').value='';paintRooms('');
+ openSheet($('#roomSheet'));
+ roomCache=await Store.listRooms();
+ paintRooms($('#rmFilter').value);
+}
+$('#rmFilter').oninput=e=>paintRooms(e.target.value);
+$('#rmClose').onclick=closeSheets;
+$('#rmManual').onclick=()=>{closeSheets();setTimeout(askRoomCode,220)};
+$('#joinBtn').onclick=askRoomCode;
+if(ROOM==='list-all')setTimeout(openRoomPicker,400);
 $('#wipeBtn').onclick=()=>ask('Delete every item?','The whole packing list is cleared for everyone. Undo is offered for a few seconds afterwards.','Delete everything',()=>{
  const snap=JSON.parse(JSON.stringify(S.items));Store.wipe();
  toast('List cleared',()=>{Store.putMany(snap);toast('List restored')})});
@@ -1874,7 +1939,7 @@ function dragSheet(sheet){
   addEventListener('pointerup',end);addEventListener('pointercancel',end);
  }));
 }
-['#editor','#actions','#stopSheet','#daySheet','#noteSheet'].forEach(id=>dragSheet($(id)));
+['#editor','#actions','#stopSheet','#daySheet','#noteSheet','#roomSheet'].forEach(id=>dragSheet($(id)));
 
 /* ═══ PWA + notifications ═════════════════════════════════════ */
 let swReg=null,swErr='';
