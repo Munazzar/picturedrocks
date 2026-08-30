@@ -214,6 +214,10 @@ button{border:0;background:none;cursor:pointer;padding:0}
 .spin[aria-pressed="true"]{opacity:1;color:var(--sun-4)}
 .spin[aria-pressed="true"] svg{fill:currentColor;stroke-width:1.4}
 @media (hover:hover){.spin{opacity:.2}.sect:hover .spin{opacity:.55}.sect:hover .spin[aria-pressed="true"]{opacity:1}}
+.sadd{flex:none;width:34px;height:34px;margin-right:1px;border-radius:50%;display:grid;place-items:center;color:var(--ink-3);opacity:.45;transition:opacity .2s var(--ease),color .2s var(--ease),transform .2s var(--ease)}
+.sadd svg{width:17px;height:17px}
+.sadd:active{transform:scale(.86)}
+@media (hover:hover){.sadd{opacity:.2}.sect:hover .sadd{opacity:.6}.sadd:hover{opacity:1;color:var(--sun-4)}}
 .sect.pinned{box-shadow:var(--shadow),inset 3px 0 0 var(--sun-4)}
 .chip.pin{border-color:var(--sun-4)}
 .mode-list .cdown,.mode-list .horizon,.mode-list [data-tab="itinerary"]{display:none}
@@ -1099,6 +1103,7 @@ function paintList(){
    <span class="stitle"><span>${esc(k)}</span><span class="bar"><i style="width:${done/rows.length*100}%"></i></span></span>
    <span class="scount">${done}/${rows.length}</span>
    <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+   <button class="sadd" data-add="${esc(k)}" aria-label="Add an item to ${esc(k)}" title="Add to ${esc(k)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
    <button class="spin" data-pin="${esc(k)}" aria-pressed="${pinned(k)}" aria-label="${pinned(k)?'Unpin':'Pin'} ${esc(k)}" title="${pinned(k)?'Unpin':'Pin to the top'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 3h6l-1 6 3 3v2H7v-2l3-3-1-6Z"/></svg></button>
    </div>
    <div class="rows" data-cat="${esc(k)}">${rows.map(it=>`<div class="row${it.packed?' done':''}" data-id="${it.id}">
@@ -1748,7 +1753,7 @@ function endDrag(){
  const clear=()=>{if(hold){clearTimeout(hold);hold=null}down=null};
  list.addEventListener('pointerdown',e=>{
   if(drag||e.button)return;
-  if(e.target.closest('.spin, .tick, .more'))return;
+  if(e.target.closest('.spin, .sadd, .tick, .more'))return;
   const row=e.target.closest('.row'),head=e.target.closest('.shead');
   const el=row||(head?head.closest('.sect'):null);
   if(!el)return;
@@ -1778,13 +1783,13 @@ function closeSheets(){scrim.classList.remove('on');
  ['#editor','#actions','#stopSheet','#daySheet','#noteSheet','#roomSheet'].forEach(id=>$(id).classList.remove('on'));hideAc()}
 scrim.onclick=closeSheets;$('#edClose').onclick=closeSheets;$('#acClose').onclick=closeSheets;
 addEventListener('keydown',e=>{if(e.key==='Escape'){closeSheets();$('#confirm').classList.remove('on')}});
-function openEditor(id,prefill){
+function openEditor(id,prefill,catPrefill){
  editing=id;const it=id?S.items[id]:null;
  $('#edTitle').textContent=id?'Edit item':'Add an item';
  $('#saveBtn').textContent=id?'Save changes':'Add to list';
- $('#edHint').textContent=id?'Changes show up on everyone’s phone right away.':'Press enter to add and keep going.';
+ $('#edHint').textContent=id?'Changes show up on everyone’s phone right away.':(catPrefill?`Adding to ${catPrefill}. Press enter to add and keep going.`:'Press enter to add and keep going.');
  $('#fName').value=it?it.name:(prefill||'');
- $('#fCat').value=it?it.cat:(prefill?guessCat(prefill):'');
+ $('#fCat').value=it?it.cat:(catPrefill||(prefill?guessCat(prefill):''));
  $('#fNote').value=it?(it.note||''):'';
  $('#fWho').value=it?(it.who||''):'';
  qty=it?(it.qty||1):1;$('#qtyVal').textContent=qty;
@@ -1878,6 +1883,7 @@ const restoreDays=snap=>()=>{
 
 /* ═══ Wiring ══════════════════════════════════════════════════ */
 $('#list').addEventListener('click',e=>{
+ const ad=e.target.closest('[data-add]');if(ad)return openEditor(null,'',ad.dataset.add);
  const pn=e.target.closest('[data-pin]');if(pn)return togglePin(pn.dataset.pin);
  const t=e.target.closest('[data-tick]');if(t)return toggle(t.dataset.tick);
  const ed=e.target.closest('[data-edit]');if(ed)return openEditor(ed.dataset.edit);
